@@ -26,6 +26,174 @@ download_ccmmf_data <- function(prefix_url, local_path, prefix_filename) {
     return(file.path(local_path, prefix_filename))
 }
 
+#' Build ERA5 Site/Ensemble Combinations
+#'
+#' Reads the site metadata file and constructs a data frame of site / ensemble
+#' combinations with associated start and end dates. Intended to be used with a
+#' downstream targets dynamic branching step.
+#'
+#' @param site_info_file Character. Path to the CSV containing site metadata.
+#'   Must include an `id` column.
+#' @param start_date Character (YYYY-MM-DD). Start date for each combination.
+#' @param end_date Character (YYYY-MM-DD). End date for each combination.
+#' @param ensemble_members Integer vector identifying ensemble member indices.
+#'
+#' @return Data frame with columns `site_id`, `start_date`, `end_date`, and
+#'   `ens_id`. Any additional columns from `site_info_file` are preserved and
+#'   repeated across ensemble members.
+#' @export
+build_era5_site_combinations <- function(
+    site_info_file = "site_info.csv",
+    start_date = "2016-01-01",
+    end_date = "2023-12-31",
+    ensemble_members = 1:10,
+    dependencies = NULL
+) {
+
+    if (!file.exists(site_info_file)) {
+        stop(sprintf("Site info file not found: %s", site_info_file), call. = FALSE)
+    }
+
+    site_info <- utils::read.csv(site_info_file, stringsAsFactors = FALSE)
+    if (!"id" %in% names(site_info)) {
+        stop("`site_info_file` must contain an `id` column.", call. = FALSE)
+    }
+
+    site_info$site_id <- site_info$id
+    site_info$start_date <- start_date
+    site_info$end_date <- end_date
+
+    if (!is.numeric(ensemble_members)) {
+        stop("`ensemble_members` must be numeric.", call. = FALSE)
+    }
+
+    if (length(ensemble_members) == 0) {
+        return(site_info[0, , drop = FALSE])
+    }
+
+    replicated_info <- site_info[rep(seq_len(nrow(site_info)), each = length(ensemble_members)), , drop = FALSE]
+    replicated_info$ens_id <- rep(ensemble_members, times = nrow(site_info))
+
+    rownames(replicated_info) <- NULL
+    return(replicated_info)
+}
+
+
+build_era5_site_combinations_args <- function(
+    site_info_file = "site_info.csv",
+    start_date = "2016-01-01",
+    end_date = "2023-12-31",
+    ensemble_members = 1:10,
+    reference_path = "",
+    sipnet_met_path = "",
+    dependencies = NULL
+) {
+
+    if (!file.exists(site_info_file)) {
+        stop(sprintf("Site info file not found: %s", site_info_file), call. = FALSE)
+    }
+
+    site_info <- utils::read.csv(site_info_file, stringsAsFactors = FALSE)
+    if (!"id" %in% names(site_info)) {
+        stop("`site_info_file` must contain an `id` column.", call. = FALSE)
+    }
+
+    site_info$site_id <- site_info$id
+    site_info$start_date <- start_date
+    site_info$end_date <- end_date
+    site_info$reference_path <- reference_path
+    site_info$sipnet_met_path <- sipnet_met_path
+
+    if (!is.numeric(ensemble_members)) {
+        stop("`ensemble_members` must be numeric.", call. = FALSE)
+    }
+
+    if (length(ensemble_members) == 0) {
+        return(site_info[0, , drop = FALSE])
+    }
+
+    replicated_info <- site_info[rep(seq_len(nrow(site_info)), each = length(ensemble_members)), , drop = FALSE]
+    replicated_info$ens_id <- rep(ensemble_members, times = nrow(site_info))
+
+    rownames(replicated_info) <- NULL
+    return(replicated_info)
+}
+
+#' Convert a Single ERA5 Combination to SIPNET Clim Drivers
+#'
+#' Runs `PEcAn.SIPNET::met2model.SIPNET()` for a single site / ensemble
+#' combination. Designed for use within a dynamic branching target fed by
+#' `build_era5_site_combinations()`.
+#'
+#' @param site_id Character. Site identifier matching directory naming.
+#' @param ens_id Integer. Ensemble member index.
+#' @param start_date Character (YYYY-MM-DD). Start date for generated `clim`
+#'   file.
+#' @param end_date Character (YYYY-MM-DD). End date for generated `clim`
+#'   file.
+#' @param site_era5_path Character. Base directory containing ERA5 NetCDF
+#'   inputs organised as `ERA5_<siteid>_<ensid>/ERA5.<ensid>.<year>.nc`.
+#' @param site_sipnet_met_path Character. Directory where SIPNET `clim` files
+#'   should be written.
+#'
+#' @return Character string giving the output directory used for the `clim`
+#'   files.
+#' @export
+convert_era5_nc_to_clim <- function(
+    site_combinations,
+    site_era5_path = NULL,
+    site_sipnet_met_path = NULL,
+    n_workers = 2,
+    dependencies = NULL
+) {
+    if (is.null(site_combinations$site_id) 
+    || is.null(site_combinations$ens_id) 
+    || is.null(site_combinations$start_date) 
+    || is.null(site_combinations$end_date)) {
+        stop("`site_id`, `ens_id`, `start_date`, and `end_date` must all be supplied.", call. = FALSE)
+    }
+
+    if (!dir.exists(site_era5_path)) {
+        stop(sprintf("Input ERA5 directory not found: %s", site_era5_path), call. = FALSE)
+    }
+
+    # source_directory <- file.path(site_era5_path, paste("ERA5", site_id, ens_id, sep = "_"))
+    # if (!dir.exists(source_directory)) {
+    #     stop(sprintf("Source ERA5 directory not found: %s", source_directory), call. = FALSE)
+    # }
+
+    if (!dir.exists(site_sipnet_met_path)) {
+        dir.create(site_sipnet_met_path, recursive = TRUE)
+    }
+
+    output_directory <- file.path(site_sipnet_met_path)
+    if (!dir.exists(output_directory)) {
+        dir.create(output_directory, recursive = TRUE)
+    }
+
+    parallel_strategy = "multisession"
+    future::plan(parallel_strategy, workers = n_workers)
+    furrr::future_pwalk(
+        site_combinations,
+        function(site_id, start_date, end_date, ens_id, ...) {
+            PEcAn.SIPNET::met2model.SIPNET(
+                in.path = file.path(
+                    site_era5_path,
+                    paste("ERA5", site_id, ens_id, sep = "_")
+                ),
+                start_date = start_date,
+                end_date = end_date,
+                in.prefix = paste0("ERA5.", ens_id),
+                outfolder = file.path(site_sipnet_met_path, site_id)
+            )
+        }
+    )
+    output_directory
+}
+
+
+#' Prepare PEcAn Run Directory
+#'
 #' Prepare PEcAn Run Directory
 #'
 #' Creates the output directory for a PEcAn workflow run if it doesn't exist.
@@ -441,7 +609,7 @@ sbatch_header_standard <- function(apptainer=NULL) {
 #SBATCH --job-name=my_job_name        # Job name
 #SBATCH --output=pecan_workflow_out_%j.log        # Standard output file
 #SBATCH --error=pecan_workflow_err_%j.log             # Standard error file
-#SBATCH --nodes=1                     # Number of nodes
+#SBATCH --nodes=1                    # Number of nodes
 #SBATCH --ntasks-per-node=1           # Number of tasks per node
 #SBATCH --cpus-per-task=1             # Number of CPU cores per task
 #SBATCH --time=1:00:00                # Maximum runtime (D-HH:MM:SS)
@@ -576,6 +744,78 @@ targets_abstract_sbatch_exec <- function(pecan_settings, function_artifact, args
     return(jobids)
 }
 
+#' Targets Source-based SLURM Batch Execution
+#'
+#' Executes a function loaded via source() remotely via SLURM batch job with optional containerization.
+#'
+#' @param pecan_settings List containing PEcAn settings including host configuration.
+#' @param function_artifact Character string specifying the name of the function within the node's calling namespace.
+#' @param args_artifact Character string specifying the name of the targets arguments object.
+#' @param task_id Character string specifying the task identifier.
+#' @param apptainer Character string specifying the Apptainer container path (optional).
+#' @param dependencies Optional parameter for dependency tracking (unused).
+#' @param conda_env Character string specifying the conda environment name (optional).
+#' @param functional_source Optional character string path to a file to be loaded via source() (optional).
+#'
+#' @return Named list containing job IDs for the submitted SLURM jobs.
+#'
+#' @details
+#' This function creates a SLURM batch script that executes a function remotely.
+#' It supports both Apptainer containers and conda environments. The function_artifact must be a string
+#' variable and the function specified must exist in the calling namespace on the compute node. The
+#' args_artifact should be the string name of a previously-returned targets object, (not the variable object itself).
+#' The function generates a batch script, submits it via sbatch, and returns the job IDs.
+#'
+#' @examples
+#' \dontrun{
+#' job_ids <- targets_abstract_sbatch_exec(pecan_settings, "my_func", "my_args", "task1")
+#' }
+#'
+#' @export
+targets_abstract_args_sbatch_exec <- function(pecan_settings, function_artifact, args_artifact, task_id, apptainer=NULL, dependencies = NULL, conda_env=NULL, functional_source=NULL) {
+    # the biggest difference between this method of execution (sourcing the function file) is that this is done at runtime within the node
+    # this means that targets sees the path to the file, but not the file contents
+    # we can therefore reference code outside the memory space of this R process (or any R process)
+    # but: targets doesn't see this code. if this code changes, if this code is user's and is wobbly, targets won't know about it.
+    # returning the function which is called via the targets framework incorporates it into target's smart re-eval
+    # thats the benefit. This is a little more simple, but works fine.
+    if (!is.character(function_artifact) || !is.character(args_artifact)) {
+        print("Remember - function_artifact and/or args_artifact should be the string name of a targets object of a function entity, not the function entity itself")
+        return(FALSE)
+    }
+
+    # Construct slurm batch file
+    slurm_output_file = paste0("slurm_command_", task_id, ".sh")
+    file_content = sbatch_header_standard(apptainer=apptainer)
+    if (!is.null(conda_env)) {
+        file_content = paste0(file_content, ' conda run -n ', conda_env, ' ')
+    }
+    if (!is.null(apptainer)) {
+        file_content = paste0(file_content, ' apptainer run ', apptainer)
+    }
+
+    file_content = paste0(file_content, ' Rscript -e "library(targets)" ')
+    if(!is.null(functional_source)){
+        file_content = paste0(file_content, '-e "source(\'', functional_source, '\')" ')
+    }
+    file_content = paste0(file_content, '-e "abstract_args=targets::tar_read(', args_artifact, ')" ')
+    file_content = paste0(file_content, '-e "do.call(', function_artifact,', abstract_args)"')
+    writeLines(file_content, slurm_output_file)
+
+    # Submit slurm batch file; leverages PEcAn.remote for monitoring
+    out = system2("sbatch", slurm_output_file, stdout = TRUE, stderr = TRUE)
+    print(paste0("Output from sbatch command is: ", out))
+    print(paste0("System will use this pattern: ", pecan_settings$host$qsub.jobid ))
+    jobids = list()
+    # submitted_jobid = sub(pecan_settings$host$qsub.jobid, '\\1', out)
+    jobids[task_id] <- PEcAn.remote::qsub_get_jobid(
+        out = out[length(out)],
+        qsub.jobid = pecan_settings$host$qsub.jobid,
+        stop.on.error = stop.on.error)
+    # print(paste0("System thinks the jobid is: ", submitted_jobid))
+    return(jobids)
+}
+
 #' Targets Based Local Execution
 #'
 #' Executes a targets function locally using a shell script.
@@ -614,6 +854,32 @@ targets_based_containerized_local_exec <- function(pecan_settings, function_arti
     system(paste0("bash ", local_output_file))
     return(TRUE)
 }
+
+
+targets_based_sourced_containerized_local_exec <- function(function_artifact, args_artifact, task_id, apptainer=NULL, dependencies = NULL, conda_env=NULL, functional_source=NULL) {
+    # this function is NOT silly. It allows us to execute code on the local node, but within an apptainer!
+    if (!is.character(function_artifact) || !is.character(args_artifact)) {
+        print("Remember - function_artifact and/or args_artifact should be the string name of a targets object of a function entity, not the function entity itself")
+        return(FALSE)
+    }
+    local_output_file = paste0("local_command_", task_id, ".sh")
+    file_content=""
+    if (!is.null(apptainer)) {
+        file_content = paste0(file_content, ' apptainer run ', apptainer)
+    }
+
+    file_content = paste0(file_content, ' Rscript -e "library(targets)" ')
+    if(!is.null(functional_source)){
+        file_content = paste0(file_content, '-e "source(\'', functional_source, '\')" ')
+    }
+    file_content = paste0(file_content, '-e "abstract_args=targets::tar_read(', args_artifact, ')" ')
+    file_content = paste0(file_content, '-e "do.call(', function_artifact,', abstract_args)"')
+    writeLines(file_content, local_output_file)
+    
+    system(paste0("bash ", local_output_file))
+    return(TRUE)
+}
+
 
 check_directory_exists <- function(directory_path, stop_on_nonexistent=FALSE) {
     if (!dir.exists(directory_path)) {

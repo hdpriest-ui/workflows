@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <pecan>
  <orchestration>
-    <workflow.base.run.directory>../../workflow_runs</workflow.base.run.directory>
+    <workflow.base.run.directory>/project/60007/hpriest/data/workflow_runs</workflow.base.run.directory>
     <functions.source>../../tools/workflow_functions.R</functions.source>
     <workflow.data.prep.1>
         <run.identifier>data_prep_run_01</run.identifier>

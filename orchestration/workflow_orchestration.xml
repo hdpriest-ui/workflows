@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<pecan>
+    <orchestration>
+        <workflow.base.run.directory>/project/60007/hpriest/data/workflow_runs</workflow.base.run.directory>
+        <functions.source>../tools/workflow_functions.R</functions.source>
+        
+        <workflow.get.base.data>
+            <run.identifier>base_data_01</run.identifier>
+            <pecan.xml.path>./pecan_workflow_with_orchestration.xml</pecan.xml.path>
+            <ccmmf.s3.artifact.01.url>s3://carb/data/workflows/phase_1a</ccmmf.s3.artifact.01.url>
+            <ccmmf.s3.artifact.01.filename>00_cccmmf_phase_1a_input_artifacts.tgz</ccmmf.s3.artifact.01.filename>
+            <ccmmf.s3.artifact.02.url>s3://carb/data/workflows/phase_2a</ccmmf.s3.artifact.02.url>
+            <ccmmf.s3.artifact.02.filename>ccmmf_phase_2a_input_artifacts.tgz</ccmmf.s3.artifact.02.filename>
+            <apptainer>
+                <remote.url>docker://hdpriest0uiuc/</remote.url>
+                <container.name>sipnet-carb</container.name>
+                <tag>latest</tag>
+                <sif>sipnet-carb_latest.sif</sif>
+            </apptainer>
+        </workflow.get.base.data>
+
+        <workflow.create.clim.files>
+            <run.identifier>clim_run_01</run.identifier>
+            <data.download.reference>base_data_01</data.download.reference>
+            <pecan.xml.path>./pecan_base_config.xml</pecan.xml.path>
+            <n.workers>8</n.workers>
+            <site.info.file>site_info.csv</site.info.file>
+            <site.sipnet.met.path>data/ERA5_SIPNET</site.sipnet.met.path>
+            <site.era5.path>data_raw/ERA5_nc</site.era5.path>
+            <parallel.strategy>multisession</parallel.strategy>
+            <start.date>2016-01-01</start.date>
+            <end.date>2023-12-31</end.date>
+            <apptainer>
+                <sif>sipnet-carb_latest.sif</sif>
+            </apptainer>
+        </workflow.create.clim.files>
+
+        <workflow.data.prep.1>
+            <run.identifier>data_prep_run_01</run.identifier>
+            <pecan.xml.path>./pecan_workflow_with_orchestration.xml</pecan.xml.path>
+            <ccmmf.data.s3.url>s3://carb/data/workflows/phase_1a</ccmmf.data.s3.url>
+            <ccmmf.data.tarball.filename>00_cccmmf_phase_1a_input_artifacts.tgz</ccmmf.data.tarball.filename>
+        </workflow.data.prep.1>
+
+        <workflow.reference.02>
+            <run.identifier>data_reference_run_02</run.identifier>
+            <pecan.xml.path>./02_pecan_workflow_config_example.xml</pecan.xml.path>
+            <data.source.01.reference>data_prep_run_01</data.source.01.reference>
+            <apptainer>
+                <remote.url>docker://hdpriest0uiuc/</remote.url>
+                <container.name>sipnet-carb</container.name>
+                <tag>latest</tag>
+                <sif>sipnet-carb_latest.sif</sif>
+            </apptainer>
+        </workflow.reference.02>
+
+        <workflow.analysis.03>
+            <run.identifier>analysis_run_identifier_03c</run.identifier>
+            <pecan.xml.path>./03_pecan_workflow_config_example.xml</pecan.xml.path>
+            <data.source.01.reference>data_prep_run_01</data.source.01.reference>
+            <apptainer.source.reference>data_reference_run_02</apptainer.source.reference>
+            <apptainer>
+                <sif>sipnet-carb_latest.sif</sif>
+            </apptainer>
+        </workflow.analysis.03>
+
+    </orchestration>
+</pecan>

@@ -100,7 +100,6 @@ tar_script({
         localized_name=apptainer_sif
       )
     ),
-
     # Prep run directory & check for continue
     tar_target(pecan_xml_file, pecan_xml_path, format = "file"),
     tar_target(pecan_settings, PEcAn.settings::read.settings(pecan_xml_file)),

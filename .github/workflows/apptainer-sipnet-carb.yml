@@ -58,5 +58,6 @@ jobs:
         dockerfile: tools/apptainer-sipnet-carb/Dockerfile
         r-version: ${{ needs.rversion.outputs.R_VERSION }}
         parent-image: "base"
-      secrets: inherit
+        model-version: develop
+      secrets: inherit 
 

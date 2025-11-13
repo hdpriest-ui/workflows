@@ -26,6 +26,14 @@ on:
           - 4.3
           - 4.4
           - devel
+      image_version:
+        description: 'version of sipnet container to use'
+        required: true
+        type: choice
+        default: "latest"
+        options:
+          - develop
+          - latest
 
 jobs:
   # ----------------------------------------------------------------------
@@ -58,6 +66,5 @@ jobs:
         dockerfile: tools/apptainer-sipnet-carb/Dockerfile
         r-version: ${{ needs.rversion.outputs.R_VERSION }}
         parent-image: "base"
-        model-version: develop
       secrets: inherit 
 

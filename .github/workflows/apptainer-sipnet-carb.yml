@@ -59,12 +59,14 @@ jobs:
 # ----------------------------------------------------------------------
   sipnet-carb:
       needs: [rversion]
-      uses: ./.github/workflows/apptainer-build-image.yml
+      uses: PecanProject/pecan/.github/workflows/docker-build-image.yml@develop
       with:
         image-name: sipnet-carb
         build-context: tools/apptainer-sipnet-carb
         dockerfile: tools/apptainer-sipnet-carb/Dockerfile
         r-version: ${{ needs.rversion.outputs.R_VERSION }}
-        parent-image: "base"
-      secrets: inherit 
+        parent-image: "pecan/model-sipnet-git"
+      secrets:
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }} 
 

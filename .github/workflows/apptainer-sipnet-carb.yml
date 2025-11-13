@@ -59,7 +59,7 @@ jobs:
 # ----------------------------------------------------------------------
   sipnet-carb:
       needs: [rversion]
-      uses: PecanProject/pecan/.github/workflows/docker-build-image.yml@develop
+      uses: ./.github/workflows/apptainer-build-image.yml
       with:
         image-name: sipnet-carb
         build-context: tools/apptainer-sipnet-carb

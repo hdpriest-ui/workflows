@@ -1,8 +1,10 @@
 # this needs to be at the top, what version are we building
-ARG IMAGE_VERSION="develop"
-ARG PARENT_IMAGE="pecan/model-sipnet-git"
+# ARG IMAGE_VERSION="develop"
+# ARG PARENT_IMAGE="pecan/model-sipnet-git"
 
-FROM ${PARENT_IMAGE}:${IMAGE_VERSION}
+# FROM ${PARENT_IMAGE}:${IMAGE_VERSION}
+# i think? the only way to get this particular tag is to build from a branch called develop.
+FROM pecan/model-sipnet-git:develop
 # ----------------------------------------------------------------------
 # ADD IN TARGETS FOR CCMMF NEEDS
 # ----------------------------------------------------------------------

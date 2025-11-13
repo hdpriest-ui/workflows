@@ -23,6 +23,10 @@ on:
         required: false
         default: ''
         type: string
+      image-version:
+        required: false
+        default: "latest"
+        type: string
       dockerhub-repo:
         required: false
         default: "hdpriest0uiuc"
@@ -91,7 +95,7 @@ jobs:
             name=${{ inputs.dockerhub-repo }}/${{ steps.name.outputs.image_name }},enable=${{ env.check_var != null }}
           # generate Docker tags based on the following events/attributes
           tags: |
-            type=raw,value=latest
+            type=raw,value=${{ inputs.image-version }}
           #  type=schedule
           # type=ref,event=branch,enable=${{ env.is_default_R }}
           # type=ref,event=branch,suffix=-R${{ inputs.r-version }}

@@ -1,6 +1,6 @@
 library(targets)
 library(tarchetypes)
-library(PEcAn.all)
+library(XML)
 
 get_workflow_args <- function() {
   option_list <- list(
@@ -18,70 +18,65 @@ get_workflow_args <- function() {
   return(args)
 }
 
-args = get_workflow_args()
+args <- get_workflow_args()
 
 if (is.null(args$settings)) {
-  stop("A PEcAn settings XML must be provided via --settings.")
+  stop("An Orchestration settings XML must be provided via --settings.")
 }
-
-settings <- PEcAn.settings::read.settings(args$settings)
-
 
 ##########################################################
 
-this_workflow_name = "workflow.analysis.03"
+workflow_name = "workflow.analysis.03"
 
-## settings and params for this workflow
-workflow_settings = settings$orchestration[[this_workflow_name]]
-workflow_function_source = settings$orchestration$functions.source
+settings_path = normalizePath(file.path(args$settings))
+settings = XML::xmlToList(XML::xmlParse(args$settings))
+
+workflow_function_source = file.path(settings$orchestration$functions.source)
+workflow_function_path = normalizePath(workflow_function_source)
 source(workflow_function_source)
-function_path = normalizePath(file.path(workflow_function_source))
 
+# hopefully can find a more elegant way to do this
+pecan_config_path = normalizePath(file.path(settings$orchestration[[workflow_name]]$pecan.xml.path))
 
-#### Primary workflow settings parsing ####
-## overall run directory for common collection of workflow artifacts
-workflow_run_directory = settings$orchestration$workflow.base.run.directory
-dir_check = check_directory_exists(workflow_run_directory, stop_on_nonexistent=TRUE)
-workflow_run_directory = normalizePath(workflow_run_directory)
+ret_obj <- workflow_run_directory_setup(orchestration_settings=settings, workflow_name=workflow_name)
 
-run_identifier = workflow_settings$run.identifier
-pecan_xml_path = normalizePath(file.path(workflow_settings$pecan.xml.path))
-
-#### Data Referencing ####
-## Workflow run base directory + data source ID = source of data ##
-data_source_run_identifier = workflow_settings$data.source.01.reference
-this_data_source_directory = normalizePath(file.path(workflow_run_directory, data_source_run_identifier))
-dir_check = check_directory_exists(this_data_source_directory, stop_on_nonexistent=TRUE)
-
-## apptainer is referenced from a different workflow run id ##
-apptainer_source_run_identifier = workflow_settings$apptainer.source.reference
-apptainer_source_dir = normalizePath(file.path(workflow_run_directory, apptainer_source_run_identifier))
-dir_check = check_directory_exists(apptainer_source_dir, stop_on_nonexistent=TRUE)
-apptainer_sif = workflow_settings$apptainer$sif
-
-
-#### This Analysis Execution Directory Setup ####
-ret_obj <- workflow_run_directory_setup(run_identifier=run_identifier, workflow_run_directory=workflow_run_directory)
 analysis_run_directory = ret_obj$run_dir
-analysis_run_id = ret_obj$run_id
+run_id = ret_obj$run_id
 
-#### Pipeline definition and launch ####
-print(paste("Starting workflow run in directory:", analysis_run_directory))
+message(sprintf("Starting workflow run '%s' in directory: %s", run_id, analysis_run_directory))
+
 setwd(analysis_run_directory)
 tar_config_set(store = "./")
-analysis_tar_script_path = file.path("./executed_pipeline.R")
- 
+tar_script_path <- file.path("./executed_pipeline.R")
+
 tar_script({
   library(targets)
   library(tarchetypes)
   library(uuid)
-  # prep parameter receivers
-  pecan_xml_path = "@PECANXML@"
-  workflow_data_source = "@WORKFLOWDATASOURCE@"
-  functions_source = "@FUNCTIONPATH@"
-  tar_source(functions_source)
-  apptainer_source_directory = "@APPTAINERSOURCE@"
-  apptainer_sif = "@APPTAINERSIF@"
+
+  function_sourcefile = "@FUNCTIONPATH@"
+  workflow_name = "@WORKFLOWNAME@"
+  pecan_xml_path = "@PECANXMLPATH@"
+  tar_source(function_sourcefile)
+  orchestration_settings = parse_orchestration_xml("@ORCHESTRATIONXML@")
+  
+  workflow_settings = orchestration_settings$orchestration[[workflow_name]]
+  base_workflow_directory = orchestration_settings$orchestration$workflow.base.run.directory
+  if (is.null(workflow_settings)) {
+    stop(sprintf("Workflow settings for '%s' not found in the configuration XML.", this_workflow_name))
+  }
+
+  #### Data Referencing ####
+  ## Workflow run base directory + data source ID = source of data ##
+  data_source_run_identifier = workflow_settings$data.source.01.reference
+  workflow_data_source = normalizePath(file.path(base_workflow_directory, data_source_run_identifier))
+  dir_check = check_directory_exists(workflow_data_source, stop_on_nonexistent=TRUE)
+
+  ## apptainer is referenced from a different workflow run id ##
+  apptainer_source_run_identifier = workflow_settings$apptainer.source.reference
+  apptainer_source_directory = normalizePath(file.path(base_workflow_directory, apptainer_source_run_identifier))
+  dir_check = check_directory_exists(apptainer_source_directory, stop_on_nonexistent=TRUE)
+  apptainer_sif = workflow_settings$apptainer$sif
 
   # tar pipeline options and config
   tar_option_set(
@@ -178,18 +173,14 @@ tar_script({
       pecan_workflow_complete(pecan_settings=sensitivity_settings)
     )
   )
-}, ask = FALSE, script = analysis_tar_script_path)
+}, ask = FALSE, script = tar_script_path)
 
-script_content <- readLines(analysis_tar_script_path)
-script_content <- gsub("@FUNCTIONPATH@", function_path, script_content)
-script_content <- gsub("@PECANXML@", pecan_xml_path, script_content)
-script_content <- gsub("@WORKFLOWDATASOURCE@", this_data_source_directory, script_content)
-script_content <- gsub("@APPTAINERSOURCE@", apptainer_source_dir, script_content)
-script_content <- gsub("@APPTAINERSIF@", apptainer_sif, script_content)
+script_content <- readLines(tar_script_path)
+script_content <- gsub("@FUNCTIONPATH@", workflow_function_path, script_content, fixed = TRUE)
+script_content <- gsub("@ORCHESTRATIONXML@", settings_path, script_content, fixed = TRUE)
+script_content <- gsub("@WORKFLOWNAME@", workflow_name, script_content, fixed=TRUE)
+script_content <- gsub("@PECANXMLPATH@", pecan_config_path, script_content, fixed=TRUE)
 
-writeLines(script_content, analysis_tar_script_path)
+writeLines(script_content, tar_script_path)
 
-tar_make(script = analysis_tar_script_path)
-
-
-
+tar_make(script = tar_script_path)

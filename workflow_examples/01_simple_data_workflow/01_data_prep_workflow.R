@@ -1,6 +1,6 @@
 library(targets)
 library(tarchetypes)
-library(PEcAn.all)
+library(PEcAn.settings)
 
 get_workflow_args <- function() {
   option_list <- list(
@@ -18,63 +18,65 @@ get_workflow_args <- function() {
   return(args)
 }
 
-args = get_workflow_args()
-settings <- PEcAn.settings::read.settings(args$settings)
 
+args <- get_workflow_args()
+
+if (is.null(args$settings)) {
+  stop("An Orchestration settings XML must be provided via --settings.")
+}
 # note: if this_run_directory exists already, and we specify the _targets script within it, targets will evaluate the pipeline already run
 # if the pipeline has not changed, the pipeline will not run. This extends to the targeted functions, their arguments, and their arguments values. 
 # thus, as long as the components of the pipeline run are kept in the functions, the data entities, and the arguments, we can have smart re-evaluation.
 
-this_workflow_name = "workflow.data.prep.1"
+workflow_name = "workflow.data.prep.1"
 
-#### Primary workflow settings parsing ####
-## overall run directory for common collection of workflow artifacts
-workflow_run_directory = settings$orchestration$workflow.base.run.directory
+settings_path = normalizePath(file.path(args$settings))
+settings = XML::xmlToList(XML::xmlParse(args$settings))
 
-## settings and params for this workflow
-workflow_settings = settings$orchestration[[this_workflow_name]]
-workflow_function_source = settings$orchestration$functions.source
+workflow_function_source = file.path(settings$orchestration$functions.source)
+workflow_function_path = normalizePath(workflow_function_source)
 source(workflow_function_source)
 
-pecan_xml_path = workflow_settings$pecan.xml.path
-ccmmf_data_tarball_url = workflow_settings$ccmmf.data.s3.url
-ccmmf_data_filename = workflow_settings$ccmmf.data.tarball.filename
-run_identifier = workflow_settings$run.identifier
+# hopefully can find a more elegant way to do this
+pecan_config_path = normalizePath(file.path(settings$orchestration[[workflow_name]]$pecan.xml.path))
 
-# TODO: input parameter validation and defense
+ret_obj <- workflow_run_directory_setup(orchestration_settings=settings, workflow_name=workflow_name)
 
-#### Handle input parameters parased from settings file ####
-#### workflow prep ####
-function_path = normalizePath(file.path(workflow_function_source))
-pecan_xml_path = normalizePath(file.path(pecan_xml_path))
-
-if (!dir.exists(workflow_run_directory)) {
-    dir.create(workflow_run_directory, recursive = TRUE)
-} 
-workflow_run_directory = normalizePath(workflow_run_directory)
-
-ret_obj <- workflow_run_directory_setup(run_identifier=run_identifier, workflow_run_directory=workflow_run_directory)
-this_run_directory = ret_obj$run_dir
+analysis_run_directory = ret_obj$run_dir
 run_id = ret_obj$run_id
 
-#### 
-print(paste("Starting workflow run in directory:", this_run_directory))
-setwd(this_run_directory)
+message(sprintf("Starting workflow run '%s' in directory: %s", run_id, analysis_run_directory))
+
+setwd(analysis_run_directory)
 tar_config_set(store = "./")
-tar_script_path = file.path("./executed_pipeline.R")
+tar_script_path <- file.path("./executed_pipeline.R")
 
 #### Pipeline definition ####
 tar_script({
   library(targets)
   library(tarchetypes)
   library(uuid)
+  library(XML)
 
-  ccmmf_data_tarball_url = "@CCMMFDATAURL@"
-  ccmmf_data_filename = "@CCMMFDATAFILENAME@"
-  tar_source("@FUNCTIONPATH@")
+  function_sourcefile = "@FUNCTIONPATH@"
+  tar_source(function_sourcefile)
+
+  orchestration_settings = parse_orchestration_xml("@ORCHESTRATIONXML@")
+  pecan_xml_path = "@PECANXMLPATH@"
+  workflow_name = "@WORKFLOWNAME@"
+  workflow_settings = orchestration_settings$orchestration[[workflow_name]]
+  base_workflow_directory = orchestration_settings$orchestration$workflow.base.run.directory
+  if (is.null(workflow_settings)) {
+    stop(sprintf("Workflow settings for '%s' not found in the configuration XML.", this_workflow_name))
+  }
+
+  ccmmf_data_tarball_url = workflow_settings$ccmmf.data.s3.url
+  ccmmf_data_filename = workflow_settings$ccmmf.data.tarball.filename
+  run_identifier = workflow_settings$run.identifier
+
   tar_option_set(
-    packages = c("PEcAn.settings", "PEcAn.utils", "PEcAn.workflow", "readr", "dplyr"),
-    imports = c("PEcAn.settings", "PEcAn.utils", "PEcAn.workflow")
+    packages = c("readr", "dplyr"),
+    imports = c()
   )
   list(
     # source data handling
@@ -91,9 +93,10 @@ tar_script({
 # so, we create the execution script, and then text-edit in the parameters.
 # Read the generated script and replace placeholders with actual file paths
 script_content <- readLines(tar_script_path)
-script_content <- gsub("@FUNCTIONPATH@", function_path, script_content)
-script_content <- gsub("@CCMMFDATAURL@", ccmmf_data_tarball_url, script_content)
-script_content <- gsub("@CCMMFDATAFILENAME@", ccmmf_data_filename, script_content)
+script_content <- gsub("@FUNCTIONPATH@", workflow_function_path, script_content, fixed = TRUE)
+script_content <- gsub("@ORCHESTRATIONXML@", settings_path, script_content, fixed = TRUE)
+script_content <- gsub("@WORKFLOWNAME@", workflow_name, script_content, fixed=TRUE)
+script_content <- gsub("@PECANXMLPATH@", pecan_config_path, script_content, fixed=TRUE)
 writeLines(script_content, tar_script_path)
 
 #### workflow execution ####

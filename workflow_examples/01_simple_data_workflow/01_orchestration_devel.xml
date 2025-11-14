@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<pecan>
+ <orchestration>
+    <workflow.base.run.directory>/project/60007/hpriest/data/workflow_runs_devel</workflow.base.run.directory>
+    <functions.source>../../tools/workflow_functions.R</functions.source>
+    <workflow.data.prep.1>
+        <run.identifier>data_prep_run_01</run.identifier>
+        <pecan.xml.path>./01_pecan_config_devel.xml</pecan.xml.path>
+        <ccmmf.data.s3.url>s3://carb/data/workflows/phase_1a</ccmmf.data.s3.url>
+        <ccmmf.data.tarball.filename>00_cccmmf_phase_1a_input_artifacts.tgz</ccmmf.data.tarball.filename>
+    </workflow.data.prep.1>
+</orchestration>
+</pecan>

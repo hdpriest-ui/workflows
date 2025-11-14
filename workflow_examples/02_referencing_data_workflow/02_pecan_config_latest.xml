@@ -1,26 +1,5 @@
 <?xml version="1.0"?>
 <pecan>
- <orchestration>
-    <workflow.base.run.directory>/project/60007/hpriest/data/workflow_runs</workflow.base.run.directory>
-    <functions.source>../../tools/workflow_functions.R</functions.source>
-    <workflow.data.prep.1>
-        <run.identifier>data_prep_run_01</run.identifier>
-        <pecan.xml.path>./01_pecan_workflow_config_example.xml</pecan.xml.path>
-        <ccmmf.data.s3.url>s3://carb/data/workflows/phase_1a</ccmmf.data.s3.url>
-        <ccmmf.data.tarball.filename>00_cccmmf_phase_1a_input_artifacts.tgz</ccmmf.data.tarball.filename>
-    </workflow.data.prep.1>
-    <workflow.reference.02>
-        <run.identifier>data_reference_run_02</run.identifier>
-        <data.source.01.reference>data_prep_run_01</data.source.01.reference>
-        <apptainer>
-            <remote.url>docker://hdpriest0uiuc/</remote.url>
-            <container.name>sipnet-carb</container.name>
-            <tag>develop</tag>
-            <sif>sipnet-carb_develop.sif</sif>
-        </apptainer>
-        <pecan.xml.path>./02_pecan_workflow_config_example.xml</pecan.xml.path>
-    </workflow.reference.02>
-</orchestration>
  <info>
   <notes></notes>
   <userid>-1</userid>
@@ -33,6 +12,7 @@
   <pft>
    <name>temperate.deciduous</name>
    <posterior.files>pfts/temperate/post.distns.Rdata</posterior.files>
+   <outdir>output/pfts/temperate.deciduous</outdir>
   </pft>
  </pfts>
  <meta.analysis>

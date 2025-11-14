@@ -12,6 +12,7 @@
   <pft>
    <name>temperate.deciduous</name>
    <posterior.files>pfts/temperate/post.distns.Rdata</posterior.files>
+   <outdir>output/pfts/temperate.deciduous</outdir>
   </pft>
  </pfts>
  <meta.analysis>

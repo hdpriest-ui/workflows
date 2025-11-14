@@ -14,11 +14,6 @@
    <posterior.files>pfts/temperate/post.distns.Rdata</posterior.files>
    <outdir>output/pfts/temperate.deciduous</outdir>
   </pft>
-  <pft>
-   <name>grass</name>
-   <posterior.files>pfts/grass/post.distns.Rdata</posterior.files>
-   <outdir>output/pfts/grass</outdir>
-  </pft>
  </pfts>
  <meta.analysis>
   <iter>3000</iter>

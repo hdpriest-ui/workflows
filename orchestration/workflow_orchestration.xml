@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <pecan>
     <orchestration>
-        <workflow.base.run.directory>/project/60007/hpriest/data/workflow_runs</workflow.base.run.directory>
+        <workflow.base.run.directory>/project/60007/hpriest/data/workflow_runs_devel</workflow.base.run.directory>
         <functions.source>../tools/workflow_functions.R</functions.source>
         
         <workflow.get.base.data>
@@ -14,8 +14,8 @@
             <apptainer>
                 <remote.url>docker://hdpriest0uiuc/</remote.url>
                 <container.name>sipnet-carb</container.name>
-                <tag>latest</tag>
-                <sif>sipnet-carb_latest.sif</sif>
+                <tag>develop</tag>
+                <sif>sipnet-carb_develop.sif</sif>
             </apptainer>
         </workflow.get.base.data>
 
@@ -23,7 +23,7 @@
             <run.identifier>clim_run_01</run.identifier>
             <data.download.reference>base_data_01</data.download.reference>
             <pecan.xml.path>./pecan_base_config.xml</pecan.xml.path>
-            <n.workers>8</n.workers>
+            <n.workers>1</n.workers>
             <site.info.file>site_info.csv</site.info.file>
             <site.sipnet.met.path>data/ERA5_SIPNET</site.sipnet.met.path>
             <site.era5.path>data_raw/ERA5_nc</site.era5.path>
@@ -31,7 +31,7 @@
             <start.date>2016-01-01</start.date>
             <end.date>2023-12-31</end.date>
             <apptainer>
-                <sif>sipnet-carb_latest.sif</sif>
+                <sif>sipnet-carb_develop.sif</sif>
             </apptainer>
         </workflow.create.clim.files>
 
@@ -49,8 +49,8 @@
             <apptainer>
                 <remote.url>docker://hdpriest0uiuc/</remote.url>
                 <container.name>sipnet-carb</container.name>
-                <tag>latest</tag>
-                <sif>sipnet-carb_latest.sif</sif>
+                <tag>develop</tag>
+                <sif>sipnet-carb_develop.sif</sif>
             </apptainer>
         </workflow.reference.02>
 
@@ -60,7 +60,7 @@
             <data.source.01.reference>data_prep_run_01</data.source.01.reference>
             <apptainer.source.reference>data_reference_run_02</apptainer.source.reference>
             <apptainer>
-                <sif>sipnet-carb_latest.sif</sif>
+                <sif>sipnet-carb_develop.sif</sif>
             </apptainer>
         </workflow.analysis.03>
 

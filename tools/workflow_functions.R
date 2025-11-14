@@ -146,6 +146,7 @@ convert_era5_nc_to_clim <- function(
     n_workers = 2,
     dependencies = NULL
 ) {
+
     if (is.null(site_combinations$site_id) 
     || is.null(site_combinations$ens_id) 
     || is.null(site_combinations$start_date) 
@@ -156,11 +157,6 @@ convert_era5_nc_to_clim <- function(
     if (!dir.exists(site_era5_path)) {
         stop(sprintf("Input ERA5 directory not found: %s", site_era5_path), call. = FALSE)
     }
-
-    # source_directory <- file.path(site_era5_path, paste("ERA5", site_id, ens_id, sep = "_"))
-    # if (!dir.exists(source_directory)) {
-    #     stop(sprintf("Source ERA5 directory not found: %s", source_directory), call. = FALSE)
-    # }
 
     if (!dir.exists(site_sipnet_met_path)) {
         dir.create(site_sipnet_met_path, recursive = TRUE)
@@ -611,6 +607,7 @@ sbatch_header_standard <- function(apptainer=NULL) {
 #SBATCH --error=pecan_workflow_err_%j.log             # Standard error file
 #SBATCH --nodes=1                    # Number of nodes
 #SBATCH --ntasks-per-node=1           # Number of tasks per node
+#SBATCH --mem=32000
 #SBATCH --cpus-per-task=1             # Number of CPU cores per task
 #SBATCH --time=1:00:00                # Maximum runtime (D-HH:MM:SS)
 
@@ -783,7 +780,6 @@ targets_abstract_args_sbatch_exec <- function(pecan_settings, function_artifact,
         print("Remember - function_artifact and/or args_artifact should be the string name of a targets object of a function entity, not the function entity itself")
         return(FALSE)
     }
-
     # Construct slurm batch file
     slurm_output_file = paste0("slurm_command_", task_id, ".sh")
     file_content = sbatch_header_standard(apptainer=apptainer)
@@ -873,11 +869,18 @@ targets_based_sourced_containerized_local_exec <- function(function_artifact, ar
         file_content = paste0(file_content, '-e "source(\'', functional_source, '\')" ')
     }
     file_content = paste0(file_content, '-e "abstract_args=targets::tar_read(', args_artifact, ')" ')
-    file_content = paste0(file_content, '-e "do.call(', function_artifact,', abstract_args)"')
-    writeLines(file_content, local_output_file)
-    
-    system(paste0("bash ", local_output_file))
-    return(TRUE)
+    file_content = paste0(file_content, '-e "function_result=do.call(', function_artifact,', abstract_args)" ')
+    get_response=TRUE
+    if(get_response){
+        file_content = paste0(file_content, '-e "print(function_result)" ')
+        writeLines(file_content, local_output_file)
+        outcome=system(paste0("bash ", local_output_file), intern = TRUE)
+    }else{
+        writeLines(file_content, local_output_file)
+        outcome=system(paste0("bash ", local_output_file))
+    }
+
+    return(outcome)
 }
 
 
@@ -893,9 +896,16 @@ check_directory_exists <- function(directory_path, stop_on_nonexistent=FALSE) {
 }
 
 
-workflow_run_directory_setup <- function(run_identifier=NULL, workflow_run_directory=NULL) {
+workflow_run_directory_setup <- function(orchestration_settings = NULL, workflow_name = NULL) {
+    workflow_run_directory = orchestration_settings$orchestration$workflow.base.run.directory
+    workflow_settings = orchestration_settings$orchestration[[workflow_name]]
+    run_identifier = workflow_settings$run.identifier
+
     if(is.null(workflow_run_directory)){
         stop("Cannot continue without a workflow run directory - check XML configuration.")
+    }
+    if (!dir.exists(workflow_run_directory)) {
+        dir.create(workflow_run_directory, recursive = TRUE)
     }
     analysis_run_id = paste0("analysis_run_", uuid::UUIDgenerate() )
     if (is.null(run_identifier)) {
@@ -909,4 +919,14 @@ workflow_run_directory_setup <- function(run_identifier=NULL, workflow_run_direc
         dir.create(analysis_run_directory, recursive = TRUE)
     }
     return(list(run_dir=analysis_run_directory, run_id=analysis_run_id))
+}
+
+
+parse_orchestration_xml <- function(orchestration_xml_path=NULL) {
+    if(is.null(orchestration_xml_path)){
+        stop("must provide orchestration XML path for parsing.")
+    }
+    orchestration_xml = XML::xmlParse(orchestration_xml_path)
+    orchestration_xml <- XML::xmlToList(orchestration_xml)
+    return(orchestration_xml)
 }

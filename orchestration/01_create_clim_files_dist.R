@@ -1,5 +1,6 @@
 library(targets)
 library(tarchetypes)
+library(XML)
 
 get_workflow_args <- function() {
   option_list <- list(
@@ -8,48 +9,6 @@ get_workflow_args <- function() {
       default = NULL,
       type = "character",
       help = "Workflow & PEcAn configuration XML"
-    ),
-    optparse::make_option(
-      "--site_era5_path",
-      default = "data_raw/ERA5_nc",
-      help = paste(
-        "Path to ERA5 NetCDF data in PEcAn CF format, organised as",
-        "single-site, single-year files within ensemble-specific subdirectories."
-      )
-    ),
-    optparse::make_option(
-      "--site_sipnet_met_path",
-      default = "data/ERA5_SIPNET",
-      help = paste(
-        "Output directory for SIPNET clim files. Results are written to",
-        "<site_sipnet_met_path>/<siteid>/ERA5.<ens>.<start>.<end>.clim"
-      )
-    ),
-    optparse::make_option(
-      "--site_info_file",
-      default = "site_info.csv",
-      help = "CSV file with one row per location. Must include an `id` column."
-    ),
-    optparse::make_option(
-      "--start_date",
-      default = "2016-01-01",
-      help = "Clim file start date (YYYY-MM-DD)."
-    ),
-    optparse::make_option(
-      "--end_date",
-      default = "2023-12-31",
-      help = "Clim file end date (YYYY-MM-DD)."
-    ),
-    optparse::make_option(
-      "--n_cores",
-      default = 1L,
-      type = "integer",
-      help = "Number of workers to allocate when running the targets pipeline."
-    ),
-    optparse::make_option(
-      "--parallel_strategy",
-      default = "multisession",
-      help = "Reserved for future parallel execution strategy selections."
     )
   )
 
@@ -60,85 +19,69 @@ get_workflow_args <- function() {
 args <- get_workflow_args()
 
 if (is.null(args$settings)) {
-  stop("A PEcAn settings XML must be provided via --settings.")
+  stop("An Orchestration settings XML must be provided via --settings.")
 }
 
-settings <- PEcAn.settings::read.settings(args$settings)
+workflow_name = "workflow.create.clim.files"
 
-this_workflow_name <- "workflow.create.clim.files"
+settings_path = normalizePath(file.path(args$settings))
+settings = XML::xmlToList(XML::xmlParse(args$settings))
 
-workflow_run_directory <- settings$orchestration$workflow.base.run.directory
-workflow_settings <- settings$orchestration[[this_workflow_name]]
-if (is.null(workflow_settings)) {
-  stop(sprintf("Workflow settings for '%s' not found in the configuration XML.", this_workflow_name))
-}
-
-workflow_function_source <- settings$orchestration$functions.source
+workflow_function_source = file.path(settings$orchestration$functions.source)
+workflow_function_path = normalizePath(workflow_function_source)
 source(workflow_function_source)
 
-function_path <- normalizePath(workflow_function_source)
-site_era5_path <- normalizePath(workflow_settings$site.era5.path, mustWork = FALSE)
-site_sipnet_met_path <- normalizePath(workflow_settings$site.sipnet.met.path, mustWork = FALSE)
-site_info_file <- normalizePath(workflow_settings$site.info.file, mustWork = FALSE)
-start_date <- workflow_settings$start.date
-end_date <- workflow_settings$end.date
-n_cores <- workflow_settings$n.workers
-parallel_strategy <- workflow_settings$parallel.strategy
+# hopefully can find a more elegant way to do this
+pecan_config_path = normalizePath(file.path(settings$orchestration[[workflow_name]]$pecan.xml.path))
 
-if (!dir.exists(workflow_run_directory)) {
-  dir.create(workflow_run_directory, recursive = TRUE)
-}
-workflow_run_directory <- normalizePath(workflow_run_directory)
+ret_obj <- workflow_run_directory_setup(orchestration_settings=settings, workflow_name=workflow_name)
 
-ret_obj <- workflow_run_directory_setup(
-  run_identifier = workflow_settings$run.identifier,
-  workflow_run_directory = workflow_run_directory
-)
+analysis_run_directory = ret_obj$run_dir
+run_id = ret_obj$run_id
 
-data_download_path = file.path(workflow_run_directory, workflow_settings$data.download.reference)
-apptainer_sif = workflow_settings$apptainer$sif
-pecan_xml_path = workflow_settings$pecan.xml.path
-pecan_xml_path = normalizePath(file.path(pecan_xml_path))
+message(sprintf("Starting workflow run '%s' in directory: %s", run_id, analysis_run_directory))
 
-this_run_directory <- ret_obj$run_dir
-run_id <- ret_obj$run_id
-
-message(sprintf("Starting workflow run '%s' in directory: %s", run_id, this_run_directory))
-
-setwd(this_run_directory)
+setwd(analysis_run_directory)
 tar_config_set(store = "./")
 tar_script_path <- file.path("./executed_pipeline.R")
-
-ensemble_literal <- sprintf(
-  "c(%s)",
-  paste(sprintf("%sL", seq_len(10)), collapse = ", ")
-)
 
 tar_script({
   library(targets)
   library(tarchetypes)
   library(uuid)
+  library(XML)
 
   function_sourcefile = "@FUNCTIONPATH@"
   tar_source(function_sourcefile)
-  pecan_xml_path = "@PECANXML@"
-  data_download_directory = "@DATADOWNLOADPATH@"
-  site_era5_path = "@SITEERA5PATH@"
-  site_sipnet_met_path = "@SITESIPNETPATH@"
-  site_info_filename = "@SITEINFO@"
-  start_date = "@STARTDATE@"
-  end_date = "@ENDDATE@"
-  ensemble_members = as.integer("@ENSEMBLE_MEMBERS@")
-  apptainer_sif = "@APPTAINERSIF@"
-  num_cores = as.integer("@NUMBEROFCORES@")
 
+  orchestration_settings = parse_orchestration_xml("@ORCHESTRATIONXML@")
+  pecan_xml_path = "@PECANXMLPATH@"
+  workflow_name = "@WORKFLOWNAME@"
+  workflow_settings = orchestration_settings$orchestration[[workflow_name]]
+  base_workflow_directory = orchestration_settings$orchestration$workflow.base.run.directory
+  if (is.null(workflow_settings)) {
+    stop(sprintf("Workflow settings for '%s' not found in the configuration XML.", this_workflow_name))
+  }
+
+  site_era5_path <- normalizePath(workflow_settings$site.era5.path, mustWork = FALSE)
+  site_sipnet_met_path <- normalizePath(workflow_settings$site.sipnet.met.path, mustWork = FALSE)
+  site_info_filename = workflow_settings$site.info.file
+  start_date <- workflow_settings$start.date
+  end_date <- workflow_settings$end.date
+  num_cores <- workflow_settings$n.workers
+  parallel_strategy <- workflow_settings$parallel.strategy
+  data_download_directory = file.path(base_workflow_directory, workflow_settings$data.download.reference)
+  apptainer_sif = workflow_settings$apptainer$sif
+  ensemble_literal <- sprintf(
+    "c(%s)",
+    paste(sprintf("%sL", seq_len(10)), collapse = ", ")
+  )
   tar_option_set(
     packages = c()
   )
 
   list(
     tar_target(pecan_xml_file, pecan_xml_path, format = "file"),
-    tar_target(pecan_settings, PEcAn.settings::read.settings(pecan_xml_file)),
     tar_target(reference_era5_path, reference_external_data_entity(external_workflow_directory=data_download_directory, external_name="data_raw/ERA5_nc", localized_name="ERA5_nc")),
     tar_target(site_info_file, reference_external_data_entity(external_workflow_directory=data_download_directory, external_name=site_info_filename, localized_name="site_info.csv")),
     tar_target(
@@ -149,6 +92,7 @@ tar_script({
         localized_name=apptainer_sif
       )
     ),
+    tar_target(pecan_settings, PEcAn.settings::read.settings(pecan_xml_file)),
     tar_target(
       era5_site_combinations,
       build_era5_site_combinations_args(
@@ -183,24 +127,20 @@ tar_script({
         apptainer=apptainer_reference, 
         dependencies = era5_clim_create_args,
         functional_source = function_sourcefile
-      ),
-      pattern=map(era5_clim_create_args)
+      )
+    ),
+    tar_target(
+      settings_job_outcome,
+      pecan_monitor_cluster_job(pecan_settings=pecan_settings, job_id_list=era5_clim_output)
     )
   )
 }, ask = FALSE, script = tar_script_path)
 
 script_content <- readLines(tar_script_path)
-script_content <- gsub("@FUNCTIONPATH@", function_path, script_content, fixed = TRUE)
-script_content <- gsub("@DATADOWNLOADPATH@", data_download_path, script_content, fixed = TRUE)
-script_content <- gsub("@SITEERA5PATH@", site_era5_path, script_content, fixed = TRUE)
-script_content <- gsub("@SITESIPNETPATH@", site_sipnet_met_path, script_content, fixed = TRUE)
-script_content <- gsub("@SITEINFO@", site_info_file, script_content, fixed = TRUE)
-script_content <- gsub("@STARTDATE@", start_date, script_content, fixed = TRUE)
-script_content <- gsub("@ENDDATE@", end_date, script_content, fixed = TRUE)
-script_content <- gsub("@ENSEMBLE_MEMBERS@", ensemble_literal, script_content, fixed = TRUE)
-script_content <- gsub("@NUMBEROFCORES@", as.character(n_cores), script_content, fixed = TRUE)
-script_content <- gsub("@APPTAINERSIF@", apptainer_sif, script_content)
-script_content <- gsub("@PECANXML@", pecan_xml_path, script_content)
+script_content <- gsub("@FUNCTIONPATH@", workflow_function_path, script_content, fixed = TRUE)
+script_content <- gsub("@ORCHESTRATIONXML@", settings_path, script_content, fixed = TRUE)
+script_content <- gsub("@WORKFLOWNAME@", workflow_name, script_content, fixed=TRUE)
+script_content <- gsub("@PECANXMLPATH@", pecan_config_path, script_content, fixed=TRUE)
 writeLines(script_content, tar_script_path)
 
 tar_make(script = tar_script_path)

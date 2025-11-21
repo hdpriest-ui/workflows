@@ -52,11 +52,14 @@ tar_script({
   tar_source(function_sourcefile)
   orchestration_settings = parse_orchestration_xml("@ORCHESTRATIONXML@")
   
+  check_orchestration_keys(orchestration_xml = orchestration_settings$orchestration, key_list = c(workflow_name, "workflow.base.run.directory"))
+
   workflow_settings = orchestration_settings$orchestration[[workflow_name]]
   base_workflow_directory = orchestration_settings$orchestration$workflow.base.run.directory
-  if (is.null(workflow_settings)) {
-    stop(sprintf("Workflow settings for '%s' not found in the configuration XML.", this_workflow_name))
-  }
+  
+  check_orchestration_keys(orchestration_xml = workflow_settings, key_list = c("apptainer", "ccmmf.s3.artifact.01.url", "ccmmf.s3.artifact.01.filename", "ccmmf.s3.artifact.02.url", "ccmmf.s3.artifact.02.filename"))
+  check_orchestration_keys(orchestration_xml = workflow_settings$apptainer, key_list = c("remote.url", "container.name", "tag", "sif"))
+  
 
   apptainer_url = workflow_settings$apptainer$remote.url
   apptainer_name = workflow_settings$apptainer$container.name
@@ -68,24 +71,12 @@ tar_script({
   artifact2_url <- workflow_settings$ccmmf.s3.artifact.02.url
   artifact2_filename <- workflow_settings$ccmmf.s3.artifact.02.filename
 
-  if (any(vapply(
-    list(artifact1_url, artifact1_filename, artifact2_url, artifact2_filename),
-    is.null,
-    logical(1)
-  ))) {
-    stop("workflow.get.base.data must define ccmmf.s3.artifact.01/02 url and filename entries.")
-  }
-
   tar_option_set(packages = character(0))
 
   list(
     tar_target(
-      ccmmf_artifact_01_file,
-      download_ccmmf_data(
-        prefix_url = artifact1_url,
-        local_path = tar_path_store(),
-        prefix_filename = artifact1_filename
-      )
+      ccmmf_artifact_01_file, 
+      download_ccmmf_data(prefix_url = artifact1_url, local_path = tar_path_store(), prefix_filename = artifact1_filename)
     ),
     tar_target(
       ccmmf_artifact_01_contents,
@@ -93,11 +84,7 @@ tar_script({
     ),
     tar_target(
       ccmmf_artifact_02_file,
-      download_ccmmf_data(
-        prefix_url = artifact2_url,
-        local_path = tar_path_store(),
-        prefix_filename = artifact2_filename
-      )
+      download_ccmmf_data(prefix_url = artifact2_url,local_path = tar_path_store(),prefix_filename = artifact2_filename)
     ),
     tar_target(
       ccmmf_artifact_02_contents,
@@ -105,12 +92,7 @@ tar_script({
     ),
     tar_target(
       apptainer_reference, 
-      pull_apptainer_container(
-        apptainer_url_base=apptainer_url, 
-        apptainer_image_name=apptainer_name, 
-        apptainer_tag=apptainer_tag, 
-        apptainer_disk_sif=apptainer_sif
-      )
+      pull_apptainer_container(apptainer_url_base=apptainer_url, apptainer_image_name=apptainer_name, apptainer_tag=apptainer_tag, apptainer_disk_sif=apptainer_sif)
     )
   )
 }, ask = FALSE, script = tar_script_path)

@@ -8,7 +8,7 @@ get_workflow_args <- function() {
       c("-s", "--settings"),
       default = NULL,
       type = "character",
-      help = "Workflow & PEcAn configuration XML"
+      help = "Workflow configuration XML"
     )
   )
 
@@ -82,15 +82,17 @@ tar_script({
 
   list(
     tar_target(pecan_xml_file, pecan_xml_path, format = "file"),
-    tar_target(reference_era5_path, reference_external_data_entity(external_workflow_directory=data_download_directory, external_name="data_raw/ERA5_nc", localized_name="ERA5_nc")),
-    tar_target(site_info_file, reference_external_data_entity(external_workflow_directory=data_download_directory, external_name=site_info_filename, localized_name="site_info.csv")),
+    tar_target(
+      reference_era5_path, 
+      reference_external_data_entity(external_workflow_directory=data_download_directory, external_name="data_raw/ERA5_nc", localized_name="ERA5_nc")
+    ),
+    tar_target(
+      site_info_file, 
+      reference_external_data_entity(external_workflow_directory=data_download_directory, external_name=site_info_filename, localized_name="site_info.csv")
+    ),
     tar_target(
       apptainer_reference, 
-      reference_external_data_entity(
-        external_workflow_directory=data_download_directory, 
-        external_name=apptainer_sif, 
-        localized_name=apptainer_sif
-      )
+      reference_external_data_entity(external_workflow_directory=data_download_directory, external_name=apptainer_sif, localized_name=apptainer_sif)
     ),
     tar_target(pecan_settings, PEcAn.settings::read.settings(pecan_xml_file)),
     tar_target(

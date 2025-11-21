@@ -3,7 +3,6 @@
     <orchestration>
         <workflow.base.run.directory>/project/60007/hpriest/data/workflow_runs_devel</workflow.base.run.directory>
         <functions.source>../tools/workflow_functions.R</functions.source>
-        
         <workflow.get.base.data>
             <run.identifier>base_data_01</run.identifier>
             <pecan.xml.path>./pecan_workflow_with_orchestration.xml</pecan.xml.path>
@@ -18,7 +17,6 @@
                 <sif>sipnet-carb_develop.sif</sif>
             </apptainer>
         </workflow.get.base.data>
-
         <workflow.create.clim.files>
             <run.identifier>clim_run_01</run.identifier>
             <data.download.reference>base_data_01</data.download.reference>
@@ -34,7 +32,19 @@
                 <sif>sipnet-carb_develop.sif</sif>
             </apptainer>
         </workflow.create.clim.files>
-
+        <workflow.build.xml>
+            <run.identifier>build_xml_03</run.identifier>
+            <data.download.reference>base_data_01</data.download.reference>
+            <pecan.xml.template>../2a_grass/template.xml</pecan.xml.template>
+            <site.info.file>site_info.csv</site.info.file>
+            <n.met>10</n.met>
+            <n.ens>20</n.ens>
+            <met.dir>ERA5_nc</met.dir>
+            <ic.dir>IC_files</ic.dir>
+            <start.date>2016-01-01</start.date>
+            <end.date>2023-12-31</end.date>
+            <output.xml>pecan_built_config.xml</output.xml>
+        </workflow.build.xml>
         <workflow.data.prep.1>
             <run.identifier>data_prep_run_01</run.identifier>
             <pecan.xml.path>./pecan_workflow_with_orchestration.xml</pecan.xml.path>

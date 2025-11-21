@@ -883,6 +883,44 @@ targets_based_sourced_containerized_local_exec <- function(function_artifact, ar
     return(outcome)
 }
 
+build_pecan_xml <- function(orchestration_xml = NULL, template_file = NULL, dependencies = NULL) {
+    library(PEcAn.settings)
+
+    site_info <- read.csv(orchestration_xml$site.info.file)
+    stopifnot(length(unique(site_info$id)) == nrow(site_info))
+
+    settings <- read.settings(template_file) |>
+    setDates(orchestration_xml$start.date, orchestration_xml$end.date)
+
+    settings$ensemble$size <- orchestration_xml$n.ens
+    settings$run$inputs$poolinitcond$ensemble <- orchestration_xml$n.ens
+
+    settings <- settings |>
+    createMultiSiteSettings(site_info) |>
+    setEnsemblePaths(
+        n_reps = orchestration_xml$n.met,
+        input_type = "met",
+        path = orchestration_xml$met.dir,
+        d1 = orchestration_xml$start.date,
+        d2 = orchestration_xml$end.date,
+        # TODO use caladapt when ready
+        # path_template = "{path}/{id}/caladapt.{id}.{n}.{d1}.{d2}.nc"
+        path_template = "{path}/{id}/ERA5.{n}.{d1}.{d2}.clim"
+    ) |>
+    setEnsemblePaths(
+        n_reps = orchestration_xml$n.ens,
+        input_type = "poolinitcond",
+        path = orchestration_xml$ic.dir,
+        path_template = "{path}/{id}/IC_site_{id}_{n}.nc"
+    )
+
+    write.settings(
+    settings,
+    outputfile = basename(orchestration_xml$output.xml),
+    outputdir = dirname(orchestration_xml$output.xml)
+    )
+    return(settings)
+}
 
 check_directory_exists <- function(directory_path, stop_on_nonexistent=FALSE) {
     if (!dir.exists(directory_path)) {
@@ -929,4 +967,20 @@ parse_orchestration_xml <- function(orchestration_xml_path=NULL) {
     orchestration_xml = XML::xmlParse(orchestration_xml_path)
     orchestration_xml <- XML::xmlToList(orchestration_xml)
     return(orchestration_xml)
+}
+
+check_orchestration_keys = function(orchestration_xml = NULL, key_list = NULL){
+  missing_values=FALSE
+  for(key in key_list){
+    if(key %in% names(orchestration_xml)){
+
+    }else{
+        missing_values=TRUE
+        warning(paste0("Could not find needed key: ", key))
+    }
+  }
+  if (missing_values) {
+    stop("One or more needed keys are not present in orchestration configuration. Please see prior warnings.")
+  }
+  return(TRUE)
 }

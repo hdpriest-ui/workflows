@@ -32,6 +32,25 @@ All instructions below assume you are working on a Linux cluster that uses Slurm
 
 ## How to run the workflow
 
+### Install SIPNET Binary
+
+If you haven't already installed SIPNET, this downloads the SIPNET v2.0.0 binary and creates symlink. We recommend keeping it in the project root directory for easy access by all workflow components:
+
+```
+wget -O ../sipnet https://github.com/PecanProject/sipnet/releases/download/v2.0.0/sipnet
+chmod +x ../sipnet
+ln -sf ../sipnet ../sipnet.git
+```
+
+### Install or update PEcAn
+
+If this is a brand-new installation, expect this step to take a few hours to download and compile more than 300 R packages. If you've installed PEcAn on this machine before, expect it to be just a few minutes of updating only the PEcAn packages and any dependencies whose version requirement has changed.
+Defaults to using 4 CPUs to compile packages in parallel. If you have more cores, adjust `sbatch`'s `--cpus-per-task` parameter.
+
+```
+sbatch -o install_pecan.out ../tools/install_pecan.sh
+```
+
 ### Copy prebuilt input artifacts
 
 These are files that were easier to prepare from the (many terabytes of) raw
@@ -67,7 +86,8 @@ EOF
 ```
 
 ```{sh}
-rclone copy ccmmf:carb/data/workflows/phase_2a/cccmmf_phase_2a_input_artifacts.tgz ./
+rclone copy ccmmf:carb/data/workflows/phase_2a/ccmmf_phase_2a_input_artifacts.tgz ./
+tar -xzf ccmmf_phase_2a_input_artifacts.tgz
 ````
 
 You can also use other tools of your choice that speak the S3 protocol,
@@ -107,7 +127,7 @@ of all parameters specified for each PFT (28 parameters for woody crops,
 22 for nonwoody) on modeled aboveground biomass, NPP, evapotranspiration,
 soil moisture, and soil carbon across the whole 2016-2023 simulation period. The analysis was repeated at each of 5 locations for each PFT.
 
-The major takeaway from the sensitivity analysis is that leaf growth and specific leaf area account for a large fraction of the observed model response across sites, PFTs, and response variables, while photosynthetic rate parameters such as half-saturation PAR, Amax, and `Vm_low_temp` explain much of the productivity and water use response in woody plants but are less important for the nonwoody PFT. Parameters related to the temperature sensitivity of photosythesis (`Vm_low_temp`, `PsnTOpt`) were considerably more elastic (i.e. larger proportional change in model output per unit change in parameter value) than other parameters this was variable from site to site while most other responses were broadly similar across sites.
+The major takeaway from the sensitivity analysis is that leaf growth and specific leaf area account for a large fraction of the observed model response across sites, PFTs, and response variables, while photosynthetic rate parameters such as half-saturation PAR, Amax, and `Vm_low_temp` explain much of the productivity and water use response in woody plants but are less important for the nonwoody PFT. Parameters related to the temperature sensitivity of photosynthesis (`Vm_low_temp`, `PsnTOpt`) were considerably more elastic (i.e. larger proportional change in model output per unit change in parameter value) than other parameters this was variable from site to site while most other responses were broadly similar across sites.
 
 Note that this analysis considers parameter sensitivity only and not uncertainty around initial conditions, management, or environmental drivers.
 

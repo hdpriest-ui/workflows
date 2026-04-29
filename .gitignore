@@ -33,6 +33,9 @@
 # VScode settings
 .vscode/
 
+# claude settings and files
+.claude/
+
 # Knitr + R Markdown cache
 *_cache/
 /cache/

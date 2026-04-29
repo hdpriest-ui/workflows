@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # magic-ensemble: minimal CLI for CCMMF ensemble workflows.
 # Usage: ./magic-ensemble <command> [--verbose] --config <path>
-# Commands: help | get-demo-data | prepare | prepare-example-1b | prepare-example-2a | run-ensembles
+# Commands: help | prepare | prepare-example-1b | prepare-example-2a | prepare-example-3 | run-ensembles
 
 set -euo pipefail
 
@@ -17,10 +17,10 @@ Usage: ./magic-ensemble <command> [global options]
 
 Commands:
   help                  Print this usage and help (no scripts run).
-  get-demo-data         Fetch demo data from S3 and create run directory (for users without local data).
   prepare               Run canonical preparation steps using workflow/ scripts.
   prepare-example-1b    Run preparation steps using the 1b statewide woody crops example scripts.
   prepare-example-2a    Run preparation steps using the 2a grass example scripts.
+  prepare-example-3     Run preparation steps using the 3 rowcrop management events example scripts.
   run-ensembles         Run step 04 (run model) using existing settings.xml and prepared inputs.
 
 Global options (after command):
@@ -30,10 +30,10 @@ Global options (after command):
 
 Examples:
   ./magic-ensemble help
-  ./magic-ensemble get-demo-data --config my_config.yaml
   ./magic-ensemble prepare --config my_config.yaml --verbose
   ./magic-ensemble prepare-example-2a --config examples/2a_grass/example_user_config.yaml
   ./magic-ensemble prepare-example-1b --config examples/1b_statewide_woody/example_user_config.yaml
+  ./magic-ensemble prepare-example-3  --config examples/3_rowcrop/example_user_config.yaml
   ./magic-ensemble run-ensembles --config my_config.yaml
 EOF
 }
@@ -56,7 +56,7 @@ VERBOSE=0
 CONFIG_FILE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    help|get-demo-data|prepare|prepare-example-1b|prepare-example-2a|run-ensembles)
+    help|prepare|prepare-example-1b|prepare-example-2a|prepare-example-3|run-ensembles)
       if [[ -z "$COMMAND" ]]; then COMMAND="$1"; shift; continue; fi
       ;;
     --verbose)   VERBOSE=1; shift; continue ;;
@@ -86,7 +86,7 @@ if [[ -z "$COMMAND" || "$COMMAND" == "help" ]]; then
   exit 0
 fi
 
-if [[ "$COMMAND" != "get-demo-data" && "$COMMAND" != "prepare" && "$COMMAND" != "prepare-example-1b" && "$COMMAND" != "prepare-example-2a" && "$COMMAND" != "run-ensembles" ]]; then
+if [[ "$COMMAND" != "prepare" && "$COMMAND" != "prepare-example-1b" && "$COMMAND" != "prepare-example-2a" && "$COMMAND" != "prepare-example-3" && "$COMMAND" != "run-ensembles" ]]; then
   echo "magic-ensemble: Unknown command: $COMMAND" >&2
   usage >&2
   exit 1
@@ -141,6 +141,8 @@ p_output_file=$(yq eval '.paths.output_file' "$MANIFEST")
 p_met_dir=$(yq eval '.paths.met_dir' "$MANIFEST")
 p_ic_dir=$(yq eval '.paths.ic_dir' "$MANIFEST")
 p_settings_xml=$(yq eval '.paths.settings_xml' "$MANIFEST")
+p_management_file_dir=$(yq eval '.paths.management_file_dir' "$MANIFEST")
+p_event_dir=$(yq eval '.paths.event_dir' "$MANIFEST")
 params_from_pft=$(yq eval '.params_from_pft' "$MANIFEST")
 additional_params=$(yq eval '.additional_params' "$MANIFEST")
 
@@ -208,6 +210,8 @@ output_file=$(resolve_path "$p_output_file")
 met_dir=$(resolve_path "$p_met_dir")
 ic_dir=$(resolve_path "$p_ic_dir")
 settings_xml=$(resolve_path "$p_settings_xml")
+management_file_dir=$(resolve_path "$p_management_file_dir")
+event_dir=$(resolve_path "$p_event_dir")
 # landtrendr_raw_files is comma-separated; resolve each segment (manifest only for now)
 landtrendr_raw_files=""
 while IFS= read -r segment; do
@@ -265,17 +269,16 @@ ensure_sif_present() {
   APPTAINER_SIF="$sif_path"
 }
 
-# --- Get list of script paths for current command (from manifest steps) ---
-get_steps() {
-  yq eval '.steps["'"$COMMAND"'"] | .[].script' "$MANIFEST"
-}
-
-# --- Populate STEPS array for current command (from manifest) ---
+# --- Populate STEPS and STEP_NAMES arrays for current command (from manifest) ---
 get_steps_array() {
   STEPS=()
+  STEP_NAMES=()
   while IFS= read -r s; do
     [[ -n "$s" ]] && STEPS+=("$s")
-  done < <(get_steps)
+  done < <(yq eval '.steps["'"$COMMAND"'"][].script' "$MANIFEST")
+  while IFS= read -r n; do
+    [[ -n "$n" ]] && STEP_NAMES+=("$n")
+  done < <(yq eval '.steps["'"$COMMAND"'"][].name' "$MANIFEST")
 }
 
 # --- R library check for step at index i (reads r_libraries from manifest step; skip if empty or .sh) ---
@@ -350,26 +353,26 @@ run_script() {
 }
 
 # --- Run shell script; CWD = REPO_ROOT. Step scripts receive documented CLI arguments. ---
+# Any arguments after the script path are appended to the standard arg list.
 run_shell_script() {
   local script="$1"
-  local step_index="${2:-0}"
+  shift
+  local extra_args=("$@")
   local script_path="${REPO_ROOT}/${script}"
   if [[ ! -f "$script_path" ]]; then
     echo "magic-ensemble: Script not found: $script_path" >&2
     exit 1
   fi
   local script_basename="${script##*/}"
-  if [[ "$script_basename" == "00_fetch_s3_and_prepare_run_dir.sh" || "$script_basename" == "00_stage_external_inputs.sh" ]]; then
+  if [[ "$script_basename" == "00_fetch_s3.sh" || "$script_basename" == "00_stage_external_inputs.sh" ]]; then
     # Step 00 helpers: documented arguments (see each script's --help).
     local args=(--repo-root "$REPO_ROOT" --manifest "$MANIFEST")
-    if [[ "$script_basename" == "00_fetch_s3_and_prepare_run_dir.sh" ]]; then
-      args+=(--command "$COMMAND" --step-index "$step_index")
-    fi
     if [[ -n "$CONFIG_FILE" && -f "$CONFIG_FILE" ]]; then
       args+=(--config "$CONFIG_FILE" --invocation-cwd "$INVOCATION_CWD")
     else
       args+=(--run-dir "$run_dir" --invocation-cwd "$INVOCATION_CWD")
     fi
+    args+=("${extra_args[@]}")
     if [[ $VERBOSE -eq 1 ]]; then
       echo "bash $script_path ${args[*]}" >&2
     fi
@@ -445,17 +448,7 @@ patch_xml_block() {
   python3 "${REPO_ROOT}/tools/patch_xml.py" "$template_path" "$xml_tag" "$xml_block" --block
 }
 
-# --- Get-demo-data: run steps from manifest (shell script only) ---
-run_get_demo_data() {
-  get_steps_array
-  check_aws
-  for i in "${!STEPS[@]}"; do
-    check_r_libs_for_step "$i"
-    run_shell_script "${STEPS[i]}" "$i"
-  done
-}
-
-# --- Prepare: run steps from manifest (hard-coded sequence for this workflow); optionally inside Apptainer ---
+# --- Prepare: run steps from manifest (name-based dispatch per step); optionally inside Apptainer ---
 run_prepare() {
   get_steps_array
   validate_pecan_dispatch
@@ -477,10 +470,21 @@ run_prepare() {
   for i in "${!STEPS[@]}"; do
     step_num=$((i + 1))
     script="${STEPS[i]}"
+    step_name="${STEP_NAMES[i]}"
     echo "magic-ensemble: prepare step $step_num of ${#STEPS[@]}: $script"
-    if [[ "$script" == *.sh ]]; then
-      run_shell_script "$script" "$i"
-      if [[ "$i" -eq 0 ]]; then
+    case "$step_name" in
+      fetch_demo_data)
+        check_aws
+        local artifact_key
+        artifact_key=$(yq eval '.steps["'"$COMMAND"'"]['"$i"'].s3_artifact' "$MANIFEST" 2>/dev/null)
+        if [[ -z "$artifact_key" || "$artifact_key" == "null" ]]; then
+          echo "magic-ensemble: fetch_demo_data step $i in '$COMMAND' is missing s3_artifact in manifest" >&2
+          exit 1
+        fi
+        run_shell_script "$script" --artifact "$artifact_key"
+        ;;
+      stage_inputs)
+        run_shell_script "$script"
         echo "magic-ensemble: patching template.xml with dispatch: $pecan_dispatch"
         patch_xml_block "host" \
           ".pecan_dispatch[\"$pecan_dispatch\"].host_xml" \
@@ -491,42 +495,56 @@ run_prepare() {
         if [[ $use_apptainer -eq 0 ]]; then
           ensure_sipnet_binary
         fi
-      fi
-    else
-      case "$i" in
-        1) run_script $apptainer_arg "$script" \
-             --site_era5_path "$site_era5_path" \
-             --site_sipnet_met_path "$site_sipnet_met_path" \
-             --site_info_file "$site_info_file" \
-             --start_date "$start_date" \
-             --end_date "$end_date" \
-             --n_cores "$n_workers" \
-             --parallel_strategy "multisession" ;;
-        2) run_script $apptainer_arg "$script" \
-             --site_info_path "$site_info_file" \
-             --field_shape_path "$field_shape_path" \
-             --ic_ensemble_size "$ic_ensemble_size" \
-             --run_start_date "$start_date" \
-             --run_LAI_date "$run_LAI_date" \
-             --ic_outdir "$ic_outdir" \
-             --data_dir "$data_dir" \
-             --pft_dir "$pft_dir" \
-             --params_read_from_pft "$params_from_pft" \
-             --landtrendr_raw_files "$landtrendr_raw_files" \
-             --additional_params "$additional_params" ;;
-        3) run_script $apptainer_arg "$script" \
-             --n_ens "$n_ens" \
-             --n_met "$n_met" \
-             --start_date "$start_date" \
-             --end_date "$end_date" \
-             --ic_dir "$ic_dir" \
-             --met_dir "$met_dir" \
-             --site_file "$site_file" \
-             --template_file "$template_file" \
-             --output_file "$output_file" ;;
-        *) echo "magic-ensemble: No argument mapping for prepare step index $i (script $script)" >&2; exit 1 ;;
-      esac
-    fi
+        ;;
+      era5)
+        run_script $apptainer_arg "$script" \
+          --site_era5_path "$site_era5_path" \
+          --site_sipnet_met_path "$site_sipnet_met_path" \
+          --site_info_file "$site_info_file" \
+          --start_date "$start_date" \
+          --end_date "$end_date" \
+          --n_cores "$n_workers" \
+          --parallel_strategy "multisession"
+        ;;
+      ic_build)
+        run_script $apptainer_arg "$script" \
+          --site_info_path "$site_info_file" \
+          --field_shape_path "$field_shape_path" \
+          --ic_ensemble_size "$ic_ensemble_size" \
+          --run_start_date "$start_date" \
+          --run_LAI_date "$run_LAI_date" \
+          --ic_outdir "$ic_outdir" \
+          --data_dir "$data_dir" \
+          --pft_dir "$pft_dir" \
+          --params_read_from_pft "$params_from_pft" \
+          --landtrendr_raw_files "$landtrendr_raw_files" \
+          --additional_params "$additional_params"
+        ;;
+      build_events)
+        run_script $apptainer_arg "$script" \
+          --site_info_path "$site_info_file" \
+          --mgmt_file_dir  "$management_file_dir" \
+          --event_outdir   "$event_dir"
+        ;;
+      xml_build)
+        local xml_extra_args=()
+        if printf '%s\n' "${STEP_NAMES[@]}" | grep -q '^build_events$'; then
+          xml_extra_args+=(--event_dir "$event_dir")
+        fi
+        run_script $apptainer_arg "$script" \
+          --n_ens "$n_ens" \
+          --n_met "$n_met" \
+          --start_date "$start_date" \
+          --end_date "$end_date" \
+          --ic_dir "$ic_dir" \
+          --met_dir "$met_dir" \
+          --site_file "$site_file" \
+          --template_file "$template_file" \
+          --output_file "$output_file" \
+          "${xml_extra_args[@]}"
+        ;;
+      *) echo "magic-ensemble: No argument mapping for step '$step_name' in command '$COMMAND'" >&2; exit 1 ;;
+    esac
     echo "magic-ensemble: prepare step $step_num completed"
   done
   echo "magic-ensemble: prepare finished (all ${#STEPS[@]} steps)"
@@ -552,10 +570,10 @@ run_run_ensembles() {
 
 # --- Main ---
 case "$COMMAND" in
-  get-demo-data)        run_get_demo_data ;;
   prepare)              run_prepare ;;
   prepare-example-1b)   run_prepare ;;
   prepare-example-2a)   run_prepare ;;
+  prepare-example-3)    run_prepare ;;
   run-ensembles)        run_run_ensembles ;;
   *)                    echo "magic-ensemble: Unknown command: $COMMAND" >&2; exit 1 ;;
 esac

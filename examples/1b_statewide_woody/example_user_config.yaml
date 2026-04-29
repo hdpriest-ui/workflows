@@ -6,7 +6,7 @@
 #   ./magic-ensemble prepare-example-1b --config <this file>
 #   ./magic-ensemble run-ensembles      --config <this file>
 
-run_dir: "1b-run-directory/"
+run_dir: "statewide-woody-example-rundir/"
 
 start_date: "2016-01-01"
 end_date: "2023-12-31"
@@ -20,5 +20,5 @@ pecan_dispatch: local-gnu-parallel
 
 # Stage example-specific input files into run_dir before prepare runs.
 external_paths:
-  template_file: "examples/1b_statewide_woody/template.xml"
-  site_info_file: "examples/1b_statewide_woody/site_info.csv"
+    template_file: "examples/1b_statewide_woody/template.xml"
+    site_info_file: "examples/1b_statewide_woody/site_info.csv"

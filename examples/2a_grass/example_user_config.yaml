@@ -9,7 +9,7 @@
 
 # Run directory: where outputs and run-specific data live.
 # Relative to the CWD where you invoke the CLI, unless you use an absolute path.
-run_dir: "config-based-rundir/"
+run_dir: "statewide-grass-example-rundir/"
 
 # Dates used by prepare and run-ensembles.
 start_date: "2016-01-01"
@@ -28,6 +28,7 @@ ic_ensemble_size: 100
 # paths in external_paths will be localized to the run_dir before the workflow is run.
 external_paths:
     template_file: "examples/2a_grass/template.xml"
+    site_info_file: "examples/2a_grass/site_info.csv"
 
 # Parallelism (e.g. for step 01 --n_cores).
 n_workers: 1

@@ -55,6 +55,7 @@ jobs:
 
       - name: Unpack conda environment
         run: |
+          set -x
           mkdir -p conda-env
           tar -xzf "pecan-all-${PECAN_ENV_VERSION}.tar.gz" -C conda-env
           source conda-env/bin/activate

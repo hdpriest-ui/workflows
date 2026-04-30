@@ -57,8 +57,12 @@ jobs:
         run: |
           mkdir -p conda-env
           tar -xzf "pecan-all-${PECAN_ENV_VERSION}.tar.gz" -C conda-env
-          ./conda-env/bin/conda-unpack
+          source conda-env/bin/activate
+          conda-unpack
           echo "${GITHUB_WORKSPACE}/conda-env/bin" >> "$GITHUB_PATH"
+          echo "R_LIBS=${GITHUB_WORKSPACE}/conda-env/lib/R/library" >> "$GITHUB_ENV"
+          [[ -n "${R_HOME}" ]] && echo "R_HOME=${R_HOME}" >> "$GITHUB_ENV"
+          [[ -n "${LD_LIBRARY_PATH}" ]] && echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Write CI config
         run: |

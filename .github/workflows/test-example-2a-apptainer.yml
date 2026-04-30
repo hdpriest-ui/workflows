@@ -1,0 +1,64 @@
+name: Test Example 2a (Apptainer)
+
+# Runs the 2a grass example end-to-end using the workflow Apptainer container
+# for all R steps, with Slurm dispatch for ensemble members.
+# Requires a self-hosted runner with Slurm and apptainer on PATH (or via module).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/2a_grass/**'
+      - 'workflow/**'
+      - 'magic-ensemble'
+      - '.github/workflows/test-example-2a-apptainer.yml'
+
+env:
+  CONFIG: ci-2a-apptainer-config.yaml
+  RUN_DIR: ci-2a-apptainer-rundir
+
+jobs:
+  run:
+    name: 2a Grass (apptainer, Slurm)
+    runs-on: self-hosted
+    timeout-minutes: 480
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.S3_GARAGE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_GARAGE_SECRET_ACCESS_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Load apptainer module
+        run: module load apptainer
+
+      - name: Write CI config
+        run: |
+          cat > "$CONFIG" << 'EOF'
+          run_dir: "ci-2a-apptainer-rundir/"
+          start_date: "2016-01-01"
+          end_date: "2023-12-31"
+          run_LAI_date: "2016-07-01"
+          n_ens: 5
+          n_met: 3
+          ic_ensemble_size: 20
+          n_workers: 4
+          use_apptainer: true
+          pecan_dispatch: slurm-dispatch
+          external_paths:
+            template_file: "examples/2a_grass/template.xml"
+            site_info_file: "examples/2a_grass/site_info.csv"
+          EOF
+
+      - name: Prepare
+        run: ./magic-ensemble prepare-example-2a --verbose --config "$CONFIG"
+
+      - name: Run ensembles
+        run: ./magic-ensemble run-ensembles --verbose --config "$CONFIG"
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf "$RUN_DIR" "$CONFIG"

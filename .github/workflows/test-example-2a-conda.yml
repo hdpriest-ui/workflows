@@ -1,0 +1,89 @@
+name: Test Example 2a (Conda)
+
+# Runs the 2a grass example end-to-end using a conda-pack environment fetched
+# from S3 for R (no Apptainer), with Slurm dispatch for ensemble members.
+# Requires a self-hosted runner with Slurm and the aws CLI.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pecan_env_version:
+        description: 'pecan-all conda-pack version (e.g. 1.10)'
+        default: '1.10'
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - 'examples/2a_grass/**'
+      - 'workflow/**'
+      - 'magic-ensemble'
+      - '.github/workflows/test-example-2a-conda.yml'
+
+env:
+  PECAN_ENV_VERSION: ${{ github.event.inputs.pecan_env_version || '1.10' }}
+  CONFIG: ci-2a-conda-config.yaml
+  RUN_DIR: ci-2a-conda-rundir
+
+jobs:
+  run:
+    name: 2a Grass (conda, Slurm)
+    runs-on: self-hosted
+    timeout-minutes: 480
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.S3_GARAGE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_GARAGE_SECRET_ACCESS_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Cache conda-pack tarball
+        id: cache-conda
+        uses: actions/cache@v4
+        with:
+          path: pecan-all-${{ env.PECAN_ENV_VERSION }}.tar.gz
+          key: pecan-all-${{ env.PECAN_ENV_VERSION }}
+
+      - name: Download conda environment from S3
+        if: steps.cache-conda.outputs.cache-hit != 'true'
+        run: |
+          aws s3 cp \
+            "s3://carb/environments/pecan-all-${PECAN_ENV_VERSION}.tar.gz" \
+            "pecan-all-${PECAN_ENV_VERSION}.tar.gz" \
+            --endpoint-url https://s3.garage.ccmmf.ncsa.cloud
+
+      - name: Unpack conda environment
+        run: |
+          mkdir -p conda-env
+          tar -xzf "pecan-all-${PECAN_ENV_VERSION}.tar.gz" -C conda-env
+          ./conda-env/bin/conda-unpack
+          echo "${GITHUB_WORKSPACE}/conda-env/bin" >> "$GITHUB_PATH"
+
+      - name: Write CI config
+        run: |
+          cat > "$CONFIG" << 'EOF'
+          run_dir: "ci-2a-conda-rundir/"
+          start_date: "2016-01-01"
+          end_date: "2023-12-31"
+          run_LAI_date: "2016-07-01"
+          n_ens: 5
+          n_met: 3
+          ic_ensemble_size: 20
+          n_workers: 4
+          use_apptainer: false
+          pecan_dispatch: slurm-dispatch
+          external_paths:
+            template_file: "examples/2a_grass/template.xml"
+            site_info_file: "examples/2a_grass/site_info.csv"
+          EOF
+
+      - name: Prepare
+        run: ./magic-ensemble prepare-example-2a --verbose --config "$CONFIG"
+
+      - name: Run ensembles
+        run: ./magic-ensemble run-ensembles --verbose --config "$CONFIG"
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf "$RUN_DIR" "$CONFIG" conda-env

@@ -54,7 +54,7 @@ jobs:
           n_ens: 5
           n_met: 3
           ic_ensemble_size: 20
-          n_workers: 4
+          n_workers: 2
           use_apptainer: false
           pecan_dispatch: slurm-dispatch
           external_paths:

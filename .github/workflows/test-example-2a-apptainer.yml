@@ -6,6 +6,11 @@ name: Test Example 2a (Apptainer)
 
 on:
   workflow_dispatch:
+    inputs:
+      pecan_env_version:
+        description: 'pecan-all conda env version (e.g. 1.10)'
+        default: '1.10'
+        required: false
   push:
     branches: [main]
     paths:
@@ -15,6 +20,7 @@ on:
       - '.github/workflows/test-example-2a-apptainer.yml'
 
 env:
+  PECAN_ENV_VERSION: ${{ github.event.inputs.pecan_env_version || '1.10' }}
   CONFIG: ci-2a-apptainer-config.yaml
   RUN_DIR: ci-2a-apptainer-rundir
 
@@ -35,6 +41,12 @@ jobs:
       - name: Load apptainer module
         run: module load apptainer
 
+      - name: Setup conda environment
+        run: |
+          aws s3 cp s3://carb/deploy/setup-pecan-env.sh setup-pecan-env.sh \
+            --endpoint-url https://s3.garage.ccmmf.ncsa.cloud
+          bash setup-pecan-env.sh "${PECAN_ENV_VERSION}" ./conda-env
+
       - name: Write CI config
         run: |
           cat > "$CONFIG" << 'EOF'
@@ -45,7 +57,7 @@ jobs:
           n_ens: 5
           n_met: 3
           ic_ensemble_size: 20
-          n_workers: 4
+          n_workers: 2
           use_apptainer: true
           pecan_dispatch: slurm-dispatch
           external_paths:
@@ -54,11 +66,15 @@ jobs:
           EOF
 
       - name: Prepare
-        run: ./magic-ensemble prepare-example-2a --verbose --config "$CONFIG"
+        run: |
+          source conda-env/bin/activate
+          ./magic-ensemble prepare-example-2a --verbose --config "$CONFIG"
 
       - name: Run ensembles
-        run: ./magic-ensemble run-ensembles --verbose --config "$CONFIG"
+        run: |
+          source conda-env/bin/activate
+          ./magic-ensemble run-ensembles --verbose --config "$CONFIG"
 
       - name: Cleanup
         if: always()
-        run: rm -rf "$RUN_DIR" "$CONFIG"
+        run: rm -rf "$RUN_DIR" "$CONFIG" conda-env

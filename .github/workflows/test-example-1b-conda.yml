@@ -38,27 +38,11 @@ jobs:
         with:
           submodules: false
 
-      - name: Cache conda-pack tarball
-        id: cache-conda
-        uses: actions/cache@v4
-        with:
-          path: pecan-all-${{ env.PECAN_ENV_VERSION }}.tar.gz
-          key: pecan-all-${{ env.PECAN_ENV_VERSION }}
-
-      - name: Download conda environment from S3
-        if: steps.cache-conda.outputs.cache-hit != 'true'
+      - name: Setup conda environment
         run: |
-          aws s3 cp \
-            "s3://carb/environments/pecan-all-${PECAN_ENV_VERSION}.tar.gz" \
-            "pecan-all-${PECAN_ENV_VERSION}.tar.gz" \
+          aws s3 cp s3://carb/deploy/setup-pecan-env.sh setup-pecan-env.sh \
             --endpoint-url https://s3.garage.ccmmf.ncsa.cloud
-
-      - name: Unpack conda environment
-        run: |
-          mkdir -p conda-env
-          tar -xzf "pecan-all-${PECAN_ENV_VERSION}.tar.gz" -C conda-env
-          source conda-env/bin/activate
-          conda-unpack
+          bash setup-pecan-env.sh "${PECAN_ENV_VERSION}" ./conda-env
 
       - name: Write CI config
         run: |

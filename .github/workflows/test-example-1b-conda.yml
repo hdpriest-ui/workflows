@@ -18,11 +18,12 @@ on:
       - 'workflow/**'
       - 'magic-ensemble'
       - '.github/workflows/test-example-1b-conda.yml'
+      - '.github/ci/example_1b_conda_config.yaml'
+      - '.github/ci/site_info_1b.csv'
 
 env:
   PECAN_ENV_VERSION: ${{ github.event.inputs.pecan_env_version || '1.10' }}
-  CONFIG: ci-1b-conda-config.yaml
-  RUN_DIR: ci-1b-conda-rundir
+  CONFIG: .github/ci/example_1b_conda_config.yaml
 
 jobs:
   run:
@@ -44,24 +45,6 @@ jobs:
             --endpoint-url https://s3.garage.ccmmf.ncsa.cloud
           bash setup-pecan-env.sh "${PECAN_ENV_VERSION}" ./conda-env
 
-      - name: Write CI config
-        run: |
-          cat > "$CONFIG" << 'EOF'
-          run_dir: "ci-1b-conda-rundir/"
-          start_date: "2016-01-01"
-          end_date: "2017-12-31"
-          run_LAI_date: "2016-07-01"
-          n_ens: 5
-          n_met: 3
-          ic_ensemble_size: 20
-          n_workers: 2
-          use_apptainer: false
-          pecan_dispatch: slurm-dispatch
-          external_paths:
-            template_file: "examples/1b_statewide_woody/template.xml"
-            site_info_file: "examples/1b_statewide_woody/site_info.csv"
-          EOF
-
       - name: Prepare
         run: |
           source conda-env/bin/activate
@@ -74,4 +57,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -rf "$RUN_DIR" "$CONFIG" conda-env
+        run: rm -rf ci-1b-conda-rundir conda-env

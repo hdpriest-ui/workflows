@@ -44,6 +44,7 @@ jobs:
           aws s3 cp s3://carb/deploy/setup-pecan-env.sh setup-pecan-env.sh \
             --endpoint-url https://s3.garage.ccmmf.ncsa.cloud
           bash setup-pecan-env.sh "${PECAN_ENV_VERSION}" ./conda-env
+          echo "RETICULATE_PYTHON=${GITHUB_WORKSPACE}/conda-env/bin/python" >> "$GITHUB_ENV"
 
       - name: Prepare
         run: |

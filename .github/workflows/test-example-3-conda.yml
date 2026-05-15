@@ -12,7 +12,7 @@ on:
         default: '1.10'
         required: false
   push:
-    branches: [main]
+    branches: [main, add-phase-3-to-cli]
     paths:
       - 'examples/3_rowcrop/**'
       - 'workflow/**'

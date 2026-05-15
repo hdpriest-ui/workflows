@@ -146,6 +146,13 @@ steps:
           inputs: []
           outputs: [data_dir, ic_outdir, site_sipnet_met_path]
 
+        - name: fetch_demo_data
+          script: "workflow/00_fetch_s3.sh"
+          s3_artifact: soil_moisture_tgz
+          r_libraries: []
+          inputs: []
+          outputs: []
+
         - name: era5
           script: "examples/3_rowcrop/01_ERA5_nc_to_clim.R"
           r_libraries: [future, furrr]
@@ -229,7 +236,7 @@ s3:
         filename: "ca_biomassfiaald_2016_stdv.tif"
     soil_moisture_tgz:
         key_prefix: "data_raw"
-        filename: "moisture_20160101_20160110.tgz"
+        filename: "soil_moisture_20160101_20260110.tgz"
 
 # Dispatch options for run-ensembles. The user config selects one by name via pecan_dispatch.
 # host_xml is the complete <host>...</host> block to inject into the staged template.xml

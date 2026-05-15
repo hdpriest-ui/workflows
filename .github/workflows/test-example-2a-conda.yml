@@ -47,14 +47,6 @@ jobs:
           bash setup-pecan-env.sh "${PECAN_ENV_VERSION}" ./conda-env
           echo "RETICULATE_PYTHON=${GITHUB_WORKSPACE}/conda-env/bin/python" >> "$GITHUB_ENV"
 
-      - name: Get demo data
-        run: |
-          set +u
-          eval "$(conda shell.bash hook)"
-          conda activate ./conda-env
-          set -u
-          ./magic-ensemble get-demo-data --verbose --config "$CONFIG"
-
       - name: Prepare
         run: |
           set +u

@@ -1,6 +1,6 @@
-name: Test Example 1b (Apptainer)
+name: Test Example 3 (Apptainer)
 
-# Runs the 1b statewide woody crops example end-to-end using the workflow
+# Runs the 3 rowcrop management events example end-to-end using the workflow
 # Apptainer container for all R steps, with Slurm dispatch for ensemble members.
 # Requires a self-hosted runner with Slurm and apptainer on PATH (or via module).
 
@@ -14,21 +14,20 @@ on:
   push:
     branches: [main]
     paths:
-      - 'examples/1b_statewide_woody/**'
+      - 'examples/3_rowcrop/**'
       - 'workflow/**'
       - 'tools/**'
       - 'magic-ensemble'
-      - '.github/workflows/test-example-1b-apptainer.yml'
-      - '.github/ci/example_1b_apptainer_config.yaml'
-      - '.github/ci/site_info_1b.csv'
+      - '.github/workflows/test-example-3-apptainer.yml'
+      - '.github/ci/example_3_apptainer_config.yaml'
 
 env:
   PECAN_ENV_VERSION: ${{ github.event.inputs.pecan_env_version || '1.10' }}
-  CONFIG: .github/ci/example_1b_apptainer_config.yaml
+  CONFIG: .github/ci/example_3_apptainer_config.yaml
 
 jobs:
   run:
-    name: 1b Statewide Woody (apptainer, Slurm)
+    name: 3 Rowcrop (apptainer, Slurm)
     runs-on: self-hosted
     timeout-minutes: 480
     env:
@@ -56,7 +55,7 @@ jobs:
           eval "$(conda shell.bash hook)"
           conda activate ./conda-env
           set -u
-          ./magic-ensemble prepare-example-1b --verbose --config "$CONFIG"
+          ./magic-ensemble prepare-example-3 --verbose --config "$CONFIG"
 
       - name: Run ensembles
         run: |
@@ -68,4 +67,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -rf ci-1b-apptainer-rundir conda-env setup-pecan-env.sh
+        run: rm -rf ci-3-apptainer-rundir conda-env setup-pecan-env.sh

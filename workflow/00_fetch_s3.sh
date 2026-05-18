@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# 00_fetch_s3.sh: fetch demo data from S3 into an existing run directory.
-# Invoked as the fetch_demo_data step of the 'get-demo-data' command.
+# 00_fetch_s3.sh: fetch a single S3 artifact into the run directory.
+# Invoked as the fetch_demo_data step; each invocation downloads exactly one artifact.
+# Tarballs (.tgz, .tar.gz) are extracted into the run directory.
+# Non-tarball files are downloaded to dest_path (relative to run_dir) from the manifest.
 # The run directory must already exist (created by the preceding stage_inputs step).
 # S3 URLs and path keys come from the workflow manifest; run dir is passed as an argument.
 #
@@ -106,15 +108,6 @@ fi
 
 cd "$REPO_ROOT"
 
-# Resolve a path relative to run_dir (RUN_DIR may be absolute or relative to REPO_ROOT).
-resolve_run_path() {
-  if [[ "$RUN_DIR" == /* ]]; then
-    echo "${RUN_DIR}/${1}"
-  else
-    echo "${REPO_ROOT}/${RUN_DIR}/${1}"
-  fi
-}
-
 # --- Read from manifest (endpoint, bucket, and per-resource key_prefix + filename) ---
 s3_endpoint=$(yq eval '.s3.endpoint_url' "$MANIFEST")
 s3_bucket=$(yq eval '.s3.bucket' "$MANIFEST")
@@ -138,23 +131,9 @@ if [[ -z "$artifact_filename" || "$artifact_filename" == "null" ]]; then
   echo "00_fetch_s3: s3 artifact key '$ARTIFACT_KEY' not found in manifest" >&2
   exit 1
 fi
+artifact_dest_path=$(yq eval '.s3["'"$ARTIFACT_KEY"'"].dest_path' "$MANIFEST")
 artifact_s3_key=$(s3_key "$artifact_key_prefix" "$artifact_filename")
 artifact_s3_uri="s3://${s3_bucket}/${artifact_s3_key}"
-
-# LandTrendr TIFs: bucket + key from s3.median_tif and s3.stdv_tif
-median_key_prefix=$(yq eval '.s3.median_tif.key_prefix' "$MANIFEST")
-median_filename=$(yq eval '.s3.median_tif.filename' "$MANIFEST")
-stdv_key_prefix=$(yq eval '.s3.stdv_tif.key_prefix' "$MANIFEST")
-stdv_filename=$(yq eval '.s3.stdv_tif.filename' "$MANIFEST")
-median_s3_key=$(s3_key "$median_key_prefix" "$median_filename")
-stdv_s3_key=$(s3_key "$stdv_key_prefix" "$stdv_filename")
-median_s3_uri="s3://${s3_bucket}/${median_s3_key}"
-stdv_s3_uri="s3://${s3_bucket}/${stdv_s3_key}"
-
-landtrendr_paths_raw=$(yq eval '.paths.landtrendr_raw_files' "$MANIFEST")
-# Split comma-separated; first segment = median, second = stdv
-landtrendr_segment_1="${landtrendr_paths_raw%%,*}"
-landtrendr_segment_2="${landtrendr_paths_raw#*,}"
 
 # --- Verify run directory exists (must be created by the preceding stage_inputs step) ---
 RUN_DIR_ABS=$(if [[ "$RUN_DIR" = /* ]]; then echo "$RUN_DIR"; else echo "$REPO_ROOT/$RUN_DIR"; fi)
@@ -164,61 +143,32 @@ if [[ ! -d "$RUN_DIR_ABS" ]]; then
   exit 1
 fi
 RUN_DIR_ABS=$(cd "$RUN_DIR_ABS" && pwd)
-RUN_DIR="$RUN_DIR_ABS"
 
-# --- Download artifact tarball into run directory and extract ---
-artifact_local="${RUN_DIR_ABS}/${artifact_filename}"
-artifact_report=$(report_path "$artifact_local")
-if [[ -f "$artifact_local" ]]; then
-  echo "00_fetch_s3: Artifact already present, skipping download and extraction: $artifact_report"
-else
-  echo "00_fetch_s3: Downloading artifact from S3 into run directory"
-  echo "00_fetch_s3: Saving to: $artifact_report"
-  (cd "$RUN_DIR_ABS" && aws s3 cp --endpoint-url "$s3_endpoint" "$artifact_s3_uri" "$artifact_filename")
-  echo "00_fetch_s3: Extracting artifact into run directory"
-  tar -xzf "$artifact_local" -C "$RUN_DIR_ABS"
-fi
-
-# --- Download LandTrendr TIFs if not present (paths from manifest: first=median, second=stdv) ---
-seg1=$(echo "$landtrendr_segment_1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-seg2=$(echo "$landtrendr_segment_2" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-download_tif() {
-  local seg="$1"
-  local s3_uri="$2"
-  local label="$3"
-  [[ -z "$seg" ]] && return 0
-  resolved=$(resolve_run_path "$seg")
-  if [[ -f "$resolved" ]]; then
-    echo "00_fetch_s3: Already present: $(report_path "$resolved")"
+# --- Download artifact ---
+if [[ "$artifact_filename" == *.tgz || "$artifact_filename" == *.tar.gz ]]; then
+  artifact_local="${RUN_DIR_ABS}/${artifact_filename}"
+  if [[ -f "$artifact_local" ]]; then
+    echo "00_fetch_s3: Artifact already present, skipping download and extraction: $(report_path "$artifact_local")"
   else
-    local dest_dir dest_name
-    dest_dir=$(dirname "$resolved")
-    dest_name=$(basename "$resolved")
-    mkdir -p "$dest_dir"
-    echo "00_fetch_s3: Downloading $label from S3"
-    echo "00_fetch_s3: Saving to: $(report_path "$resolved")"
-    (cd "$dest_dir" && aws s3 cp --endpoint-url "$s3_endpoint" "$s3_uri" "$dest_name")
+    echo "00_fetch_s3: Downloading artifact from S3 into run directory"
+    echo "00_fetch_s3: Saving to: $(report_path "$artifact_local")"
+    (cd "$RUN_DIR_ABS" && aws s3 cp --endpoint-url "$s3_endpoint" "$artifact_s3_uri" "$artifact_filename")
+    echo "00_fetch_s3: Extracting artifact into run directory"
+    tar -xzf "$artifact_local" -C "$RUN_DIR_ABS"
   fi
-}
-download_tif "$seg1" "$median_s3_uri" "median TIF"
-download_tif "$seg2" "$stdv_s3_uri" "stdv TIF"
-
-# --- Download soil moisture tarball and extract ---
-sm_key_prefix=$(yq eval '.s3.soil_moisture_tgz.key_prefix' "$MANIFEST")
-sm_filename=$(yq eval '.s3.soil_moisture_tgz.filename' "$MANIFEST")
-sm_s3_key=$(s3_key "$sm_key_prefix" "$sm_filename")
-sm_s3_uri="s3://${s3_bucket}/${sm_s3_key}"
-sm_local="${RUN_DIR_ABS}/${sm_filename}"
-sm_report=$(report_path "$sm_local")
-if [[ -f "$sm_local" ]]; then
-  echo "00_fetch_s3_and_prepare_run_dir: Soil moisture tarball already present: $sm_report"
 else
-  echo "00_fetch_s3_and_prepare_run_dir: Downloading soil moisture data from S3"
-  echo "00_fetch_s3_and_prepare_run_dir: Saving to: $sm_report"
-  (cd "$RUN_DIR_ABS" && aws s3 cp --endpoint-url "$s3_endpoint" "$sm_s3_uri" "$sm_filename")
+  if [[ -z "$artifact_dest_path" || "$artifact_dest_path" == "null" ]]; then
+    artifact_dest_path="$artifact_filename"
+  fi
+  artifact_local="${RUN_DIR_ABS}/${artifact_dest_path}"
+  if [[ -f "$artifact_local" ]]; then
+    echo "00_fetch_s3: Already present, skipping: $(report_path "$artifact_local")"
+  else
+    mkdir -p "$(dirname "$artifact_local")"
+    echo "00_fetch_s3: Downloading from S3"
+    echo "00_fetch_s3: Saving to: $(report_path "$artifact_local")"
+    aws s3 cp --endpoint-url "$s3_endpoint" "$artifact_s3_uri" "$artifact_local"
+  fi
 fi
-echo "00_fetch_s3_and_prepare_run_dir: Extracting soil moisture data into run directory"
-tar -xzf "$sm_local" -C "$RUN_DIR_ABS"
 
-echo "00_fetch_s3_and_prepare_run_dir: Done."
+echo "00_fetch_s3: Done."

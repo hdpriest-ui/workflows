@@ -20,6 +20,7 @@ on:
       - 'magic-ensemble'
       - '.github/workflows/test-example-3-conda.yml'
       - '.github/ci/example_3_conda_config.yaml'
+      - '.github/ci/site_info_3.csv'
 
 env:
   PECAN_ENV_VERSION: ${{ github.event.inputs.pecan_env_version || '1.10' }}

@@ -216,6 +216,7 @@ if (file.exists(lai_csv_path)) {
   lai_est <- NULL
   sites_needing_lai <- site_info
 }
+options(parallelly.maxWorkers.localhost = 2)
 nlai <- nrow(sites_needing_lai)
 if (nlai > 0) {
   PEcAn.logger::logger.info("Retrieving LAI for", nlai, "sites")

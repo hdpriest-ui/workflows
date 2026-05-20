@@ -1,4 +1,4 @@
-"UniqueID","site_id","lat","lon","pft","field_id","site.pft","id"
+"UniqueID","old_site_id","lat","lon","pft","field_id","site.pft","id"
 1301797,"8773c58306e8d9a0",32.71585,-115.47163,"annual crop",441532,"annual_crop",441532
 1300446,"f2ce12d75f3b2cc6",32.75557,-115.41586,"annual crop",560426,"annual_crop",560426
 1303893,"6fc4cac215be0705",32.76887,-115.57358,"annual crop",383042,"annual_crop",383042

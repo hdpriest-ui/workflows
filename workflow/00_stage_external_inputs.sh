@@ -188,7 +188,7 @@ while IFS= read -r line; do
     echo "00_stage_external_inputs: external_paths key '${key}' has no corresponding entry in manifest.paths" >&2
     exit 1
   fi
-  dest="${RUN_DIR_ABS}/$(basename "$manifest_path")"
+  dest="${RUN_DIR_ABS}/${manifest_path}"
   dest_dir=$(dirname "$dest")
   mkdir -p "$dest_dir"
 

@@ -39,3 +39,4 @@ use_apptainer: true
 
 # Switch dispatch method for parallel execution (local-gnu-parallel, slurm-dispatch, etc.).
 pecan_dispatch: local-gnu-parallel
+# slurm_partition: ""  # Slurm partition for sbatch jobs (slurm-dispatch only). Omit to use the cluster default.

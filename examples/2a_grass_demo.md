@@ -4,18 +4,22 @@ This guide walks through running the 2a grass example end-to-end using `magic-en
 
 ## Prerequisites
 
-**Conda environment** at `~/.conda/envs/pecan-all`:
+#### Conda environment
+Default install location is `~/.conda/envs/pecan-all`.
+
 ```bash
 conda activate ~/.conda/envs/pecan-all
 ```
 
-**Repository**: clone the main branch and enter the directory:
+#### Repository
+Clone the main branch and enter the directory:
 ```bash
 git clone https://github.com/ccmmf/workflows.git
 cd workflows
 ```
 
-**AWS CLI** with a profile named `magic` configured for NCSA Garage S3. Verify with:
+#### AWS CLI
+With a profile named `magic` configured for NCSA Garage S3. Verify with:
 ```bash
 aws s3  --profile magic ls s3://carb/
 # outputs:
@@ -28,7 +32,10 @@ aws s3  --profile magic ls s3://carb/
 # PRE tmp/
 ```
 
-**Slurm partition**: if your cluster requires a specific partition, uncomment `slurm_partition` in the config and set it before running Step 3. If omitted, Slurm uses the cluster default.
+#### Slurm partition
+
+If your cluster requires a specific partition, uncomment and set `slurm_partition` in `examples/2a_grass/example_user_config.yaml` before running Step 3. 
+If omitted, Slurm uses the cluster default.
 
 ## Running the workflow
 

@@ -50,12 +50,20 @@ defines which scripts run at steps 1–3 per command; step 0 always uses
 workflow/00_stage_external_inputs.sh  (step 0, all prepare variants)
   → creates run_dir
   → copies external_paths files into run_dir (manifest-defined destinations)
-  → [patch_xml_block() runs twice after this step]
-      → patches <host> block: reads pecan_dispatch host_xml from manifest,
-        substitutes @SIF@ if use_apptainer is set
-      → patches <model> block: reads sipnet_model model_xml from manifest,
-        selects model_xml_apptainer variant if use_apptainer is set
-      → both use tools/patch_xml.py --block
+  → [after this step]
+      → patch_xml_block("host"): reads pecan_dispatch host_xml from manifest,
+        substitutes @SIF@/@PARTITION@, selects the *_apptainer variant if
+        use_apptainer is set, then replaces the whole <host> block via
+        tools/patch_xml.py --block. <host> genuinely differs in structure
+        between dispatch modes (<qsub> vs <modellauncher>), so it needs the
+        manifest + whole-block-replace treatment.
+      → patch_sipnet_binary(): <model> does NOT vary in structure between
+        modes -- only the binary path differs -- so each example's own
+        template.xml authors its complete <model> block directly (including
+        any example-specific fields), with @SIPNET_BINARY@ left as a literal
+        placeholder in <binary>. This just does a plain in-place substitution
+        of that one token; no manifest block, no python, no whole-element
+        replace, so example-specific <model> content is never clobbered.
 
 [step 1]  01_ERA5_nc_to_clim.R
   reads:  run_dir/data_raw/ERA5_nc, run_dir/site_info.csv

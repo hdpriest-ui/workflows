@@ -44,7 +44,8 @@ work on HPC by "just" adding a system-specific prefix, e.g.
 ```sh
 export AWS_PROFILE=magic
 aws s3 sync --exclude='mslsp/*' s3://carb/management/ ./data_raw/management
-aws s3 sync s3://carb/data_raw/ERA5_CA_nc ./data_raw/ERA5_CA_nc
+aws s3 cp s3://carb/data_raw/ERA5_CA_nc_2016_2024.tgz .
+tar xf ERA5_CA_nc_2016_2024.tgz
 aws s3 cp s3://carb/data/workflows/phase_3/magic_example3_input_data_20260711.tgz .
 tar xf magic_example3_input_data_20260711.tgz
 ```

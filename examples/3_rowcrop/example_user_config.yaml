@@ -1,0 +1,33 @@
+# Example user config for the 3 row crop workflow.
+# Copy this file and edit before running. Only run_dir and pecan_dispatch are required;
+# all other keys fall back to the defaults shown.
+#
+# NOTE: unlike the other examples, site_info.csv is not checked in here -- it
+# must be generated once via:
+#   Rscript ../../tools/build_site_info.R --location_file=../../data/design_points.csv
+# (run from this directory, per this example's README) before prepare-example-3 can run.
+#
+# Run with:
+#   ./magic-ensemble prepare-example-3 --config <this file>
+#   ./magic-ensemble run-ensembles     --config <this file>
+
+run_dir: "3-rowcrop-run-directory/"
+
+start_date: "2016-01-01"
+end_date: "2023-12-31"
+run_LAI_date: "2016-07-01"
+n_ens: 20
+n_met: 10
+ic_ensemble_size: 100
+n_workers: 1
+use_apptainer: false
+pecan_dispatch: slurm-dispatch
+# slurm_partition: ""  # Slurm partition for sbatch jobs (slurm-dispatch only). Omit to use the cluster default.
+
+# AWS CLI named profile for S3 access (get-demo-data command).
+aws_profile: magic
+
+# Stage example-specific input files into run_dir before prepare runs.
+external_paths:
+  template_file: "examples/3_rowcrop/template.xml"
+  site_info_file: "examples/3_rowcrop/site_info.csv"

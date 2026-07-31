@@ -40,9 +40,9 @@
   <id>99000000003</id>
   <type>SIPNET</type>
   <revision>git</revision>
-  <delete.raw>FALSE</delete.raw>
-  <binary>sipnet.git</binary>
-  <prerun>cp data/sipnet.event @RUNDIR@</prerun>
+  <delete.raw>TRUE</delete.raw>
+  <binary>@SIPNET_BINARY@</binary>
+  <prerun>cp data/events.in @RUNDIR@</prerun>
  </model>
  <run>
   <site><!-- inserted at config time --></site>

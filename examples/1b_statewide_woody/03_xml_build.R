@@ -32,6 +32,14 @@ options <- list(
       "Should contain subdirs named by site id"
     )
   ),
+  optparse::make_option("--n_ic",
+    default = 100,
+    help = paste(
+      "Number of initial condition files actually present in ic_dir",
+      "(i.e. the ic_ensemble_size used to generate them).",
+      "The poolinitcond ensemble is sampled from this many files."
+    )
+  ),
   optparse::make_option("--met_dir",
     default = "data/ERA5_SIPNET",
     help = paste(
@@ -56,6 +64,14 @@ options <- list(
   optparse::make_option("--output_file",
     default = "settings.xml",
     help = "path to write output XML"
+  ),
+  optparse::make_option("--output_dir",
+    default = "output",
+    help = paste(
+      "Path the settings should declare as output directory.",
+      "Replaces outdir/modeloutdir/rundir/host$outdir/host$rundir",
+      "(as [out], [out]/out, [out]/run, [out]/out, [out]/run respectively)"
+    )
   )
 ) |>
   # Show default values in help message
@@ -93,6 +109,14 @@ settings <- read.settings(args$template_file) |>
 settings$ensemble$size <- args$n_ens
 settings$run$inputs$poolinitcond$ensemble <- args$n_ens
 
+# Update output directories
+# Note that we're assuming local and remote paths are the same.
+settings$outdir <- args$output_dir
+settings$modeloutdir <- file.path(args$output_dir, "out")
+settings$rundir <- file.path(args$output_dir, "run")
+settings$host$outdir <- file.path(args$output_dir, "out")
+settings$host$rundir <- file.path(args$output_dir, "run")
+
 # Hack: setEnsemblePaths leaves all path components other than siteid
 # identical across sites. To use site-specific grid id, replace each siteid.
 id2grid <- function(s) {
@@ -118,7 +142,7 @@ settings <- settings |>
   ) |>
   papply(id2grid) |>
   setEnsemblePaths(
-    n_reps = args$n_ens,
+    n_reps = args$n_ic,
     input_type = "poolinitcond",
     path = args$ic_dir,
     path_template = "{path}/{id}/IC_site_{id}_{n}.nc"

@@ -48,6 +48,7 @@ settings <- PEcAn.settings::read.settings(args$settings)
 
 # Report package and model versions for provenance
 PEcAn.all::pecan_version()
+PEcAn.logger::logger.info(system2(settings$model$binary, "-v", stdout = TRUE))
 
 if (!dir.exists(settings$outdir)) {
   dir.create(settings$outdir, recursive = TRUE)
@@ -62,9 +63,29 @@ if (file.exists(status_file)) {
 # Write model specific configs
 if (PEcAn.utils::status.check("CONFIG") == 0) {
   PEcAn.utils::status.start("CONFIG")
-  settings <- PEcAn.workflow::runModule.run.write.configs(settings)
+
+  ens_design <- PEcAn.uncertainty::generate_joint_ensemble_design(
+    settings = settings[[1]],
+    ensemble_size = settings$ensemble$size
+  )
+  sample_env <- list2env(ens_design$samples)
+  save(list = ls(sample_env), envir = sample_env,
+       file = file.path(settings$outdir, "samples.Rdata"))
+
+  settings <- PEcAn.workflow::runModule.run.write.configs(
+    settings,
+    input_design = ens_design$X
+  )
   PEcAn.settings::write.settings(settings, outputfile = "pecan.CONFIGS.xml")
   PEcAn.utils::status.end()
+
+  # For examples with event/crop-change ensembles (e.g. row crop), break each
+  # run's config into date segments. No-op when those inputs aren't wired up.
+  if (!is.null(settings$run$inputs$crop_changes) || !is.null(settings$run$inputs$events)) {
+    PEcAn.utils::status.start("CONFIG_SEGMENTS")
+    papply(settings, \(s) PEcAn.SIPNET::write_segmented_configs.SIPNET(s, ens_design$X))
+    PEcAn.utils::status.end()
+  }
 } else if (file.exists(file.path(settings$outdir, "pecan.CONFIGS.xml"))) {
   settings <- PEcAn.settings::read.settings(
     file.path(settings$outdir, "pecan.CONFIGS.xml")

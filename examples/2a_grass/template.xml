@@ -45,7 +45,7 @@
   <type>SIPNET</type>
   <revision>git</revision>
   <delete.raw>TRUE</delete.raw>
-  <binary>/usr/local/bin/sipnet.git</binary>
+  <binary>@SIPNET_BINARY@</binary>
   <prerun>cp data/events.in @RUNDIR@</prerun>
  </model>
  <run>

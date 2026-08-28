@@ -42,6 +42,83 @@ options(error = quote({
 
 library("PEcAn.all")
 
+# --- TEMPORARY UPSTREAM PATCH --------------------------------------------
+# PEcAn.SIPNET::write.config.SIPNET() computes its local rundir/outdir as
+# settings$host$rundir/host$outdir UNLESS (settings$host$qsub is unset AND
+# settings$host$name == "localhost"). For us, host$qsub IS set (slurm-sbatch
+# dispatch) even though we always run locally, so that override never fires
+# and rundir/outdir fall back to settings$host$rundir/host$outdir. For plain
+# per-run configs this happens to be harmless (settings$rundir and
+# settings$host$rundir are the same absolute path in our settings.xml), but
+# PEcAn.SIPNET::write_segment_configs() (used by write_segmented_configs.SIPNET,
+# the CONFIG_SEGMENTS step below) only overrides settings$rundir/modeloutdir
+# to redirect a segment's config into its own nested directory -- it never
+# touches settings$host$rundir/host$outdir, which stay pointed at the
+# top-level run directory. Combined with write_segment_configs()'s
+# intentionally-reused dummy run.id "1" (see
+# PEcAn.SIPNET:::write_segment_configs), every segment's rundir/outdir
+# computation lands on the wrong, nonexistent "output/run/1"/"output/out/1"
+# instead of the correct nested segment path -- breaking the events.in copy
+# (fails loudly, a Warning) and, more importantly, the @RUNDIR@/@OUTDIR@
+# substitution baked into each segment's own job.sh content (fails silently).
+#
+# The qsub check is the wrong discriminator here: it answers "how are
+# ensemble members dispatched," not "where do config files live on this
+# host" -- for any localhost run (dispatched via qsub or not), rundir/outdir
+# should always come from settings$rundir/modeloutdir, which every caller
+# (segmented or not) already correctly controls. This patches that condition
+# in-memory only (does not touch the installed package on disk -- same
+# mechanism trace() below uses, via assignInNamespace); it needs a real
+# upstream PEcAn.SIPNET fix. Remove this block once that lands.
+local({
+  fn <- PEcAn.SIPNET::write.config.SIPNET
+  b <- body(fn)
+  target <- 20L
+  stopifnot(
+    identical(
+      deparse(b[[target]][[2]]),
+      'is.null(settings$host$qsub) && (settings$host$name == "localhost")'
+    )
+  )
+  new_stmt <- b[[target]]
+  new_stmt[[2]] <- quote(settings$host$name == "localhost")
+  b[[target]] <- new_stmt
+  body(fn) <- b
+  assignInNamespace("write.config.SIPNET", fn, ns = "PEcAn.SIPNET")
+})
+# --- END TEMPORARY UPSTREAM PATCH -----------------------------------------
+
+# --- TEMPORARY DIAGNOSTIC TRACE ---------------------------------------
+# Instruments PEcAn.SIPNET::write.config.SIPNET() in-session only (does
+# not touch the installed package) to log, for every call, the run.id it
+# receives and the PFT set in trait.values -- checking whether per-site
+# PFT narrowing (settings$run$site$site.pft) actually takes effect, and
+# whether run.id is ever something other than a real ENS-XXXXX-<site> id
+# (relates to the "output/run/1/events.in" and multi-PFT warning
+# investigations). Remove once resolved.
+trace(PEcAn.SIPNET::write.config.SIPNET, tracer = quote({
+  cat(sprintf(
+    "[TRACE write.config.SIPNET] run.id=%s (class=%s) site.id=%s pfts=[%s] n_pfts=%d\n",
+    as.character(run.id),
+    class(run.id),
+    tryCatch(as.character(settings$run$site$id), error = function(e) "NA"),
+    paste(names(trait.values), collapse = ","),
+    length(trait.values)
+  ))
+}), print = FALSE)
+
+# Instruments the internal (unexported) PEcAn.SIPNET:::write_segment_configs
+# right after its crop_code -> pft mapping step (body statement 14, "segments
+# <- dplyr::mutate(pft = dplyr::coalesce(...), ...)") to catch, per site, the
+# full crop_code/pft table as computed -- checking whether an NA pft (seen
+# for site 515023) already exists at this point (bug in segment_dataframe()/
+# crop2pft_example()) or is introduced later, in the per-segment loop's
+# choose_pft/run_traits indexing. Remove once resolved.
+trace(PEcAn.SIPNET:::write_segment_configs, at = 15, tracer = quote({
+  cat("[TRACE write_segment_configs] site=", run_settings$run$site$id, "\n")
+  print(segments[, c("crop_code", "pft")])
+}), print = FALSE)
+# --- END TEMPORARY DIAGNOSTIC TRACE -------------------------------------
 
 # Report package versions for provenance
 PEcAn.all::pecan_version()

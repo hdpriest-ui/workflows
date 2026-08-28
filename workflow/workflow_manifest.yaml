@@ -285,7 +285,7 @@ steps:
         - name: build-events
           script: "examples/3_rowcrop/02a_build_events.R"
           slurm: true
-          r_libraries: [tidyverse, callr]
+          r_libraries: [tidyverse, callr, glue]
           inputs:
               site_info_path: site_info_file
               raw_parquet_dir: raw_parquet_dir
@@ -479,7 +479,8 @@ sipnet_model:
 sipnet_install:
     src_dir: "tools/sipnet_src"
     bin_dir: "tools/sipnet_binaries"
-    revision: "v2.1.0"
+    revision: "d2fc7a2"
+    # revision: "v2.1.0"
 
 # Apptainer (not in user config)
 apptainer:

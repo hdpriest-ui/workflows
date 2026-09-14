@@ -352,23 +352,37 @@ report_prepare_summary() {
 }
 
 # --- Populate STEPS/STEP_NAMES/STEP_SLURM arrays for current command (from
-# manifest). All three are index-aligned with the manifest's step list, so
-# STEP_SLURM must append one entry per step even when the step omits
-# 'slurm' (defaulting to "false") -- unlike STEPS/STEP_NAMES, it cannot skip
-# blank/null lines without breaking that alignment. ---
+# manifest). All three are index-aligned with the manifest's step list.
+# STEPS/STEP_NAMES are built together by index and fail fast if a step is
+# missing 'script' or 'name' -- building them as two independent streams
+# (each silently skipping its own blank/null lines) could desync the two
+# arrays if only one field were missing on a given step, silently pairing
+# a later step's name with an earlier step's script. STEP_SLURM stays a
+# separate stream: it must append one entry per step even when a step
+# omits 'slurm' (defaulting to "false"), so it cannot skip blank/null
+# lines either, but a missing 'slurm' is expected/valid, unlike a missing
+# 'script'/'name'. ---
 get_steps_array() {
   STEPS=()
   STEP_NAMES=()
   STEP_SLURM=()
-  local script name slurm
-  while IFS= read -r script; do
-    [[ -z "$script" || "$script" == "null" ]] && continue
+  local total i script name slurm
+  total=$(yq eval ".steps.${COMMAND} | length" "$MANIFEST" 2>/dev/null)
+  [[ -z "$total" || "$total" == "null" ]] && total=0
+  for ((i = 0; i < total; i++)); do
+    script=$(yq eval ".steps.${COMMAND}[${i}].script" "$MANIFEST" 2>/dev/null)
+    name=$(yq eval ".steps.${COMMAND}[${i}].name" "$MANIFEST" 2>/dev/null)
+    if [[ -z "$script" || "$script" == "null" ]]; then
+      echo "magic-ensemble: manifest error: steps.${COMMAND}[${i}] is missing 'script'." >&2
+      exit 1
+    fi
+    if [[ -z "$name" || "$name" == "null" ]]; then
+      echo "magic-ensemble: manifest error: steps.${COMMAND}[${i}] (script: ${script}) is missing 'name'." >&2
+      exit 1
+    fi
     STEPS+=("$script")
-  done < <(yq eval ".steps.${COMMAND}[].script" "$MANIFEST" 2>/dev/null)
-  while IFS= read -r name; do
-    [[ -z "$name" || "$name" == "null" ]] && continue
     STEP_NAMES+=("$name")
-  done < <(yq eval ".steps.${COMMAND}[].name" "$MANIFEST" 2>/dev/null)
+  done
   while IFS= read -r slurm; do
     [[ -z "$slurm" || "$slurm" == "null" ]] && slurm="false"
     STEP_SLURM+=("$slurm")
